@@ -73,13 +73,13 @@ public class Main implements IXposedHookLoadPackage {
                         }
 
 // 広告ビューかどうかを判定
-                        boolean isAdView = className.contains("Ad")
+                        boolean isAdView = className.contains("_Ad_")
                                 || className.contains("com.five_corp.ad.internal.view.d")
                                 || className.equals("com.five_corp.ad.internal.view.m")
                                 || className.contains("com.mbridge.msdk.videocommon.view.MyImageView")
                                 || className.contains("com.mbridge.msdk.nativex.view.WindVaneWebViewForNV")
                                 || className.contains("Ads")
-                               || className.contains("ads")
+                                || className.contains("ads")
                                 || adClassNames.stream().anyMatch(adClass -> {
                             if (adClass instanceof String) {
                                 // Check if the class name matches
@@ -156,7 +156,7 @@ public class Main implements IXposedHookLoadPackage {
                                 view.setLayoutParams(layoutParams);
                             }
                         }
-                        if (className.contains("Ad") || className.contains("ads")) {
+                        if (className.contains("Ads") || className.contains("ads")) {
                             ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
                             if (layoutParams != null) {
                                 layoutParams.height = 0;
