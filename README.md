@@ -26,6 +26,5 @@ Write the class name written there
 in the center.
 If there are multiple classes, separate them with ,.
 
-The black part above 2ch is the resource name, o.lastEntry, so enter "o.lastEntry", click SAVE AD CLASEES, and restart the hooked app.
 
 If the resource name is no longer being written, delete the file.
