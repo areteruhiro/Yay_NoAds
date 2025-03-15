@@ -1,17 +1,30 @@
 package io.test.hiro.NoAD;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.PopupWindow;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -20,9 +33,12 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
@@ -35,7 +51,6 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class Main implements IXposedHookLoadPackage {
-    private Set<Object> adClassNames = new HashSet<>();
     private Set<String> containsSet = new HashSet<>();
     private Set<String> exactMatchSet = new HashSet<>();
     private Set<String> excludeSet = new HashSet<>();
@@ -43,16 +58,14 @@ public class Main implements IXposedHookLoadPackage {
     private static final String DIRECTORY_NAME = "NoAd Module";
     private static boolean hasToastShown = false; // トースト表示済みフラグ
     private static final String PREF_NAME = "ad_prefs";  // SharedPreferencesファイル名
+
     @Override
     public void handleLoadPackage(@NonNull XC_LoadPackage.LoadPackageParam loadPackageParam) throws Throwable {
-        loadAdClassesFromPreferences();
-        XSharedPreferences preferences = new XSharedPreferences("io.test.hiro.NoAD", PREF_NAME);
-        String packageName = loadPackageParam.packageName;  // 正しいパッケージ名を取得
+        String packageName = loadPackageParam.packageName;
         if ("io.test.hiro.NoAD".equals(packageName)) {
-            return; // ここで処理を抜ける
+            return;
         }
 
-        preferences.makeWorldReadable(); // モジュールがアクセスできるように設定
         XposedHelpers.findAndHookMethod(
                 ViewGroup.class,
                 "addView",
@@ -63,43 +76,50 @@ public class Main implements IXposedHookLoadPackage {
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                         View view = (View) param.args[0];
                         Context context = view.getContext();
-
+                        String className = view.getClass().getName();
                         if (!hasToastShown) {
-                            Toast.makeText(context, "Loading" + adClassNames, Toast.LENGTH_SHORT).show();
-                            hasToastShown = true;
-                        }
+                            try {
+                                loadAdClassesFromPreferences(context,packageName);
+                                hasToastShown = true;
 
+                                XposedBridge.log("Ad detection popup displayed");
+
+                            } catch (Exception e) {
+                                XposedBridge.log("Popup display failed: " + e.getMessage());
+
+                                Toast.makeText(context, "Ad detection activated", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                        if ("android.widget.TextView".equals(className)
+                                || "android.widget.ImageView".equals(className)
+                                || "android.widget.Space".equals(className)
+                                || "androidx.appcompat.widget.AppCompatTextView".equals(className)
+                                || "androidx.appcompat.widget.AppCompatImageView".equals(className)
+                                || "android.widget.FrameLayout".equals(className)
+                                || "androidx.appcompat.view.menu.ActionMenuItemView".equals(className)
+                                || "androidx.core.widget.ContentLoadingProgressBar".equals(className)
+                                || "androidx.appcompat.widget.AppCompatButton".equals(className)
+                        ) {
+                            return; // 処理をスキップ
+                        }
                         checkAndChangeBackgroundColor(context, view, packageName);
 
                         if ("com.google.android.webview".equals(packageName) || "com.google.android.gms".equals(packageName)) {
                             return;
                         }
 
-                        boolean isAdView = false;
-                        String className = view.getClass().getName();
-                        String resourceName = getResourceName(view, context.getResources());
 
-                        isAdView = adClassNames.stream().anyMatch(adClass -> {
-                            if (adClass instanceof String) {
-                                return className.contains((String) adClass);
-                            } else if (adClass instanceof Integer) {
-                                return view.getId() == (Integer) adClass;
-                            }
-                            return false;
-                        });
-                        if (!isAdView && resourceName != null) {
-                            if (exactMatchSet.contains(resourceName)) {
-                                isAdView = true;
-                            }
-                            else {
-                                boolean containsMatch = containsSet.stream().anyMatch(c -> resourceName.contains(c));
-                                boolean isExcluded = excludeSet.contains(resourceName);
-                                isAdView = containsMatch && !isExcluded;
-                            }
+                        boolean shouldHide = false;
+
+                        if (excludeSet.contains(className)) {
+                            shouldHide = false;
+                        } else {
+
+                            shouldHide = containsSet.stream().anyMatch(className::contains) ||
+                                    exactMatchSet.contains(className);
                         }
 
-                        // 広告判定後の処理（変更なし）
-                        if (isAdView && view.getVisibility() != View.GONE) {
+                        if (shouldHide && view.getVisibility() != View.GONE) {
                             view.setVisibility(View.GONE);
                         }
                     }
@@ -115,22 +135,26 @@ public class Main implements IXposedHookLoadPackage {
                         View view = (View) param.thisObject;
                         Context context = view.getContext();
                         String className = view.getClass().getName();
-                        String resourceName = getResourceName(view, context.getResources());
-
                         boolean shouldHide = false;
+                        if ("android.widget.TextView".equals(className)
+                                || "android.widget.ImageView".equals(className)
+                                || "android.widget.Space".equals(className)
+                                || "androidx.appcompat.widget.AppCompatTextView".equals(className)
+                                || "androidx.appcompat.widget.AppCompatImageView".equals(className)
+                                || "android.widget.FrameLayout".equals(className)
+                                || "androidx.appcompat.view.menu.ActionMenuItemView".equals(className)
+                                || "androidx.core.widget.ContentLoadingProgressBar".equals(className)
+                                || "androidx.appcompat.widget.AppCompatButton".equals(className)
 
-                        shouldHide |= adClassNames.contains(className);
-                        shouldHide |= (view.getId() != View.NO_ID && adClassNames.contains(view.getId()));
+                        ) {
+                            return; // 処理をスキップ
+                        }
+                        if (excludeSet.contains(className)) {
+                            shouldHide = false;
+                        } else {
 
-
-                        if (resourceName != null) {
-
-                            shouldHide |= exactMatchSet.contains(resourceName);
-
-
-                            boolean containsMatch = containsSet.stream().anyMatch(c -> resourceName.contains(c));
-                            boolean isExcluded = excludeSet.contains(resourceName);
-                            shouldHide |= containsMatch && !isExcluded;
+                            shouldHide = containsSet.stream().anyMatch(className::contains) ||
+                                    exactMatchSet.contains(className);
                         }
 
                         if (shouldHide) {
@@ -138,22 +162,67 @@ public class Main implements IXposedHookLoadPackage {
                             if (layoutParams != null) {
                                 layoutParams.height = 0;
                                 view.setLayoutParams(layoutParams);
+                                XposedBridge.log("Ad view hidden on attach: " + className);
                             }
                         }
                     }
                 }
         );
-        XposedHelpers.findAndHookMethod("android.view.View", loadPackageParam.classLoader, "onAttachedToWindow", new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                View view = (View) param.thisObject;
-                String packageName = loadPackageParam.packageName;
-                Context context = view.getContext();
-                checkAndChangeBackgroundColor(context,view, packageName);
-            }
-        });
 
-        for (Object adClass : adClassNames) {
+
+        XposedHelpers.findAndHookMethod("android.view.View", loadPackageParam.classLoader, "onAttachedToWindow",
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        View view = (View) param.thisObject;
+                        Context context = view.getContext();
+                        String className = view.getClass().getName();
+                        String resourceName = getResourceName(view, context.getResources());
+
+                        boolean shouldHide = false;
+                        if ("android.widget.TextView".equals(className)
+                                || "android.widget.ImageView".equals(className)
+                                || "android.widget.Space".equals(className)
+                                || "androidx.appcompat.widget.AppCompatTextView".equals(className)
+                                || "androidx.appcompat.widget.AppCompatImageView".equals(className)
+                                || "android.widget.FrameLayout".equals(className)
+                                || "androidx.appcompat.view.menu.ActionMenuItemView".equals(className)
+                                || "androidx.core.widget.ContentLoadingProgressBar".equals(className)
+                                || "androidx.appcompat.widget.AppCompatButton".equals(className)
+
+                        ) {
+                            return; // 処理をスキップ
+                        }
+                        checkAndChangeBackgroundColor(context, view, loadPackageParam.packageName);
+                        XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
+                        XposedBridge.log("Current containsSet: " + containsSet);
+
+                        if (className != null) {
+
+                            boolean isExcluded = excludeSet.stream().anyMatch(className::contains);
+                            boolean isExcludedBySuffix = excludeSet.stream().anyMatch(className::endsWith);
+
+                            if (isExcluded || isExcludedBySuffix) {
+                                shouldHide = false;
+                            } else {
+                                // containsSetまたはexactMatchSetに基づいて表示を決定
+                                shouldHide = containsSet.stream().anyMatch(className::contains) ||
+                                        exactMatchSet.contains(className);
+                            }
+                        }
+
+                        if (shouldHide) {
+                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+                            if (layoutParams != null) {
+                                layoutParams.height = 0;
+                                view.setLayoutParams(layoutParams);
+                                XposedBridge.log("Ad view hidden on attach: " + className);
+                            }
+                        }
+                    }
+                }
+        );
+        for (Object adClass : containsSet) {
             if (adClass instanceof String) {
                 String adClassName = (String) adClass;
                 try {
@@ -167,59 +236,143 @@ public class Main implements IXposedHookLoadPackage {
                                         View view = (View) param.thisObject;
                                         Context context = view.getContext();
 
-                                        // 即時非表示処理
-                                        view.setVisibility(View.GONE);
 
-                                        // レイアウトリスナーの追加
-                                        view.getViewTreeObserver().addOnGlobalLayoutListener(
-                                                new ViewTreeObserver.OnGlobalLayoutListener() {
-                                                    @Override
-                                                    public void onGlobalLayout() {
-                                                        // リソース名の取得
-                                                        String resourceName = getResourceName(view, context.getResources());
-                                                        boolean isAd = false;
+                                        if (!excludeSet.contains(adClassName)) {
 
-                                                        // クラスベース判定
-                                                        isAd |= adClassNames.contains(view.getClass().getName());
+                                            view.setVisibility(View.GONE);
 
-                                                        // リソースベース判定（C/M/E）
-                                                        if (resourceName != null) {
-                                                            // M:完全一致
-                                                            isAd |= exactMatchSet.contains(resourceName);
-
-                                                            // C:部分一致 + E:除外
-                                                            boolean containsMatch = containsSet.stream()
-                                                                    .anyMatch(c -> resourceName.contains(c));
-                                                            boolean isExcluded = excludeSet.contains(resourceName);
-                                                            isAd |= containsMatch && !isExcluded;
-                                                        }
-
-                                                        // 最終判定
-                                                        if (isAd && view.getVisibility() != View.GONE) {
-                                                            view.setVisibility(View.GONE);
+                                            view.getViewTreeObserver().addOnGlobalLayoutListener(
+                                                    new ViewTreeObserver.OnGlobalLayoutListener() {
+                                                        @Override
+                                                        public void onGlobalLayout() {
+                                                            if (view.getVisibility() != View.GONE) {
+                                                                view.setVisibility(View.GONE);
+                                                            }
                                                         }
                                                     }
-                                                }
-                                        );
+                                            );
+                                        }
                                     }
                                 }
                             }
                     );
                 } catch (ClassNotFoundException e) {
-                    // クラスが見つからない場合のエラーハンドリング
+                    XposedBridge.log("Class not found: " + adClassName);
                 }
             }
         }
+    }
+    private void writeDefaultConfig(File configFile, String packageName) {
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8))) {
+            String defaultConfig;
 
+            if (packageName.equals("jp.co.airfront.android.a2chMate")) {
+                defaultConfig = "C:Ads,C;ads,C:ADs,E:o.onAdsExhausted";
+            } else {
+                defaultConfig = "C:Ads,C;ads,C:ADs"; // デフォルト値
+            }
+
+            writer.write(defaultConfig);
+            writer.flush();
+
+        } catch (IOException e) {
+            XposedBridge.log("Failed to write default config: " + e.getMessage());
+
+        }
+    }
+    private void loadAdClassesFromPreferences(Context context, String packageName) {
+        // パッケージ名に基づいたファイル名を作成
+        File configFile = new File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "NoAd Module/" + packageName + "_ad_config.txt" // パッケージ名をファイル名に追加
+        );
+
+        try {
+            File parentDir = configFile.getParentFile();
+            if (!parentDir.exists() && !parentDir.mkdirs()) {
+                XposedBridge.log("Failed to create directory: " + parentDir.getAbsolutePath());
+                return;
+            }
+
+            if (!configFile.exists()) {
+                if (configFile.createNewFile()) {
+                    XposedBridge.log("Created new config file: " + configFile.getAbsolutePath());
+                    writeDefaultConfig(configFile,packageName);
+                } else {
+                    XposedBridge.log("Failed to create config file");
+                    return;
+                }
+            }
+
+            StringBuilder adClassesContent = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8))) {
+
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    processConfigEntry(line.trim());
+                    adClassesContent.append(line.trim()).append("\n");
+                }
+            }
+            if (adClassesContent.length() > 0) {
+                String adClasses = adClassesContent.toString();
+                XposedBridge.log("Loaded ad classes: " + adClasses);
+                Toast.makeText(context, "Loaded ad classes:\n" + adClasses, Toast.LENGTH_LONG).show(); // トースト表示
+            }
+
+        } catch (IOException e) {
+            XposedBridge.log("Config file error: " + e.getMessage());
+        }
+    }
+    private void processConfigEntry(String entry) {
+        String[] entries = entry.split(",");
+        for (String e : entries) {
+            String trimmedEntry = e.trim();
+            if (trimmedEntry.startsWith("C:")) {
+                containsSet.add(trimmedEntry.substring(2).trim());
+            } else if (trimmedEntry.startsWith("M:")) {
+                exactMatchSet.add(trimmedEntry.substring(2).trim());
+            } else if (trimmedEntry.startsWith("E:")) {
+                excludeSet.add(trimmedEntry.substring(2).trim());
+            } else {
+                containsSet.add(trimmedEntry);
+            }
+        }
     }
 
-    private Set<String> changedResources = new HashSet<>();
+    private String getViewResourceName(View view) {
+        try {
+            int id = view.getId();
+            if (id != View.NO_ID) {
+                String resourceName = view.getResources().getResourceName(id);
+                return resourceName != null ? resourceName : String.valueOf(id);
+            }
+        } catch (Resources.NotFoundException e) {
+            //XposedBridge.log("Resource name not found for View ID: " + view.getId());
+        } catch (Exception e) {
+            //XposedBridge.log("Unexpected error while retrieving resource name: " + e.getMessage());
+        }
+        return null;
+    }
 
+    private String getResourceName(View view, Resources resources) {
+        try {
+            int resourceId = view.getId();
+            if (resourceId != View.NO_ID) {
+                return resources.getResourceEntryName(resourceId);
+            }
+        } catch (Resources.NotFoundException e) {
+            ////XposedBridge.log("Resource not found: " + e.getMessage());
+        }
+        return "";
+    }
+    private Set<String> changedResources = new HashSet<>();
     private boolean isChangingColor = false;
+
     private void checkAndChangeBackgroundColor(Context context, View view, String packageName) {
         try {
             if ("com.google.android.webview".equals(packageName) || "com.google.android.gms".equals(packageName)) {
-                return; // 特定のパッケージの場合は処理を終了
+                return;
             }
             if (!isLoggingEnabled()) {
                 return;
@@ -230,8 +383,8 @@ public class Main implements IXposedHookLoadPackage {
             isChangingColor = true;
             String resourceName = getViewResourceName(view);
             if (resourceName == null || resourceName.isEmpty()) {
-                // リソース名が空の場合はスキップ
-                return;
+                // リソース名が見つからない場合は、クラス名を使用する
+                resourceName = view.getClass().getName();
             }
 
             // 既に変更済みのリソースかどうかを確認
@@ -272,21 +425,55 @@ public class Main implements IXposedHookLoadPackage {
                     }
                 }
             } else {
-                // 背景が null の場合もログに記載
                 String viewClassName = view.getClass().getName();
                 XposedBridge.log("Background is null for Resource Name: " + resourceName);
                 if (isLoggingEnabled()) {
                     writeLogToFile(context, packageName, resourceName, null, viewClassName, "null");
                 }
+
+                String finalResourceName = resourceName;
+                view.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                    @Override
+                    public void onGlobalLayout() {
+                        int width = view.getWidth();
+                        int height = view.getHeight();
+
+                        if (width <= 0 || height <= 0) {
+                            width = 100;
+                            height = 100;
+                        }
+
+                        int randomColor = getRandomColor();
+                        Bitmap colorBitmap = createColorBitmap(width, height, randomColor);
+                        view.setBackground(new BitmapDrawable(context.getResources(), colorBitmap));
+                        changedResources.add(finalResourceName);
+
+                        String colorCode = String.format("#%06X", (0xFFFFFF & randomColor));
+                        XposedBridge.log("Set random color background for Resource Name: " + finalResourceName + " (Class: " + viewClassName + ") to " + colorCode);
+
+                        // リスナーを削除
+                        view.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                    }
+                });
             }
         } catch (Resources.NotFoundException e) {
-            // リソースが見つからない場合のエラーログ
             XposedBridge.log("Resource name not found for View ID: " + view.getId());
         } finally {
-            isChangingColor = false; // フラグをリセット
+            isChangingColor = false;
         }
     }
 
+    private int getRandomColor() {
+        Random random = new Random();
+        return Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256));
+    }
+
+    private Bitmap createColorBitmap(int width, int height, int color) {
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(color);
+        return bitmap;
+    }
     private void writeLogToFile(Context context, String packageName, String resourceName, String colorCode, String className, String backgroundType) {
         File backupDir = null;
         File logFile = null;
@@ -313,40 +500,6 @@ public class Main implements IXposedHookLoadPackage {
         }
     }
 
-
-    private String getViewResourceName(View view) {
-        try {
-            int id = view.getId();
-            if (id != View.NO_ID) {
-                // リソース名を取得
-                String resourceName = view.getResources().getResourceName(id);
-                return resourceName != null ? resourceName : String.valueOf(id);
-            }
-        } catch (Resources.NotFoundException e) {
-            //XposedBridge.log("Resource name not found for View ID: " + view.getId());
-        } catch (Exception e) {
-            //XposedBridge.log("Unexpected error while retrieving resource name: " + e.getMessage());
-        }
-        return null; // 解決できなかった場合
-    }
-
-
-
-
-    // リソース名を取得するヘルパーメソッド
-    private String getResourceName(View view, Resources resources) {
-        try {
-            int resourceId = view.getId();
-            if (resourceId != View.NO_ID) {
-                return resources.getResourceEntryName(resourceId); // リソース名を返す
-            }
-        } catch (Resources.NotFoundException e) {
-            ////XposedBridge.log("Resource not found: " + e.getMessage());
-        }
-        return "";
-    }
-
-    // ログ状態を確認するメソッド
     private boolean isLoggingEnabled() {
         File backupDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), DIRECTORY_NAME);
         if (!backupDir.exists()) {
@@ -376,24 +529,4 @@ public class Main implements IXposedHookLoadPackage {
         }
     }
 
-    private void loadAdClassesFromPreferences() {
-        XSharedPreferences preferences = new XSharedPreferences("io.test.hiro.NoAD", PREF_NAME);
-        preferences.makeWorldReadable();
-        preferences.reload();
-
-        String adClasses = preferences.getString("ad_classes", "");
-        if (!adClasses.isEmpty()) {
-            String[] adClassArray = adClasses.split(",");
-            for (String entry : adClassArray) {
-                entry = entry.trim();
-                if (entry.startsWith("C:")) {
-                    containsSet.add(entry.substring(2).trim());
-                } else if (entry.startsWith("M:")) {
-                    exactMatchSet.add(entry.substring(2).trim());
-                } else if (entry.startsWith("E:")) {
-                    excludeSet.add(entry.substring(2).trim());
-                }
-            }
-        }
-    }
 }
