@@ -10,7 +10,7 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 20
-        versionName "4.0"
+        versionName "4.1"
         proguardFiles += 'proguard-rules.pro'
         multiDexEnabled false
         vectorDrawables {
@@ -23,7 +23,7 @@ android {
             storeFile file('./misc/keystore.jks')
             storePassword 'android'
             keyAlias 'key0'
-            
+
             keyPassword 'android'
         }
     }

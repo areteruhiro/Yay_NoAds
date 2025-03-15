@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
@@ -77,48 +78,60 @@ public class Main implements IXposedHookLoadPackage {
                         View view = (View) param.args[0];
                         Context context = view.getContext();
                         String className = view.getClass().getName();
+                        Resources resources = context.getResources();
+                        String resourceName = getResourceName(view, resources);
+
                         if (!hasToastShown) {
                             try {
-                                loadAdClassesFromPreferences(context,packageName);
+                                loadAdClassesFromPreferences(context, packageName);
                                 hasToastShown = true;
+                                if (isLoggingEnabled()) {
 
-                                XposedBridge.log("Ad detection popup displayed");
+
+                                    XposedBridge.log("Ad detection popup displayed");
+                                }
 
                             } catch (Exception e) {
-                                XposedBridge.log("Popup display failed: " + e.getMessage());
-
-                                Toast.makeText(context, "Ad detection activated", Toast.LENGTH_SHORT).show();
+                                if (isLoggingEnabled()) {
+                                    Toast.makeText(context, "Ad detection activated", Toast.LENGTH_SHORT).show();
+                                }
                             }
                         }
-                        if ("android.widget.TextView".equals(className)
-                                || "android.widget.ImageView".equals(className)
-                                || "android.widget.Space".equals(className)
-                                || "androidx.appcompat.widget.AppCompatTextView".equals(className)
-                                || "androidx.appcompat.widget.AppCompatImageView".equals(className)
-                                || "android.widget.FrameLayout".equals(className)
-                                || "androidx.appcompat.view.menu.ActionMenuItemView".equals(className)
-                                || "androidx.core.widget.ContentLoadingProgressBar".equals(className)
-                                || "androidx.appcompat.widget.AppCompatButton".equals(className)
-                        ) {
+
+                        // 特定のクラス名をスキップ
+                        if (Arrays.asList(
+                                "android.widget.TextView",
+                                "android.widget.ImageView",
+                                "android.widget.Space",
+                                "androidx.appcompat.widget.AppCompatTextView",
+                                "androidx.appcompat.widget.AppCompatImageView",
+                                "android.widget.FrameLayout",
+                                "androidx.appcompat.view.menu.ActionMenuItemView",
+                                "androidx.core.widget.ContentLoadingProgressBar",
+                                "androidx.appcompat.widget.AppCompatButton"
+                        ).contains(className)) {
                             return; // 処理をスキップ
                         }
+
                         checkAndChangeBackgroundColor(context, view, packageName);
 
                         if ("com.google.android.webview".equals(packageName) || "com.google.android.gms".equals(packageName)) {
                             return;
                         }
 
-
                         boolean shouldHide = false;
 
-                        if (excludeSet.contains(className)) {
-                            shouldHide = false;
-                        } else {
-
-                            shouldHide = containsSet.stream().anyMatch(className::contains) ||
-                                    exactMatchSet.contains(className);
+                        // クラス名に基づくチェック
+                        if (!excludeSet.contains(className)) {
+                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
                         }
 
+                        // リソース名に基づくチェック
+                        if (!excludeSet.contains(resourceName)) {
+                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
+                        }
+
+                        // ビューを非表示にする
                         if (shouldHide && view.getVisibility() != View.GONE) {
                             view.setVisibility(View.GONE);
                         }
@@ -135,26 +148,29 @@ public class Main implements IXposedHookLoadPackage {
                         View view = (View) param.thisObject;
                         Context context = view.getContext();
                         String className = view.getClass().getName();
+                        String resourceName = getResourceName(view, context.getResources());
                         boolean shouldHide = false;
-                        if ("android.widget.TextView".equals(className)
-                                || "android.widget.ImageView".equals(className)
-                                || "android.widget.Space".equals(className)
-                                || "androidx.appcompat.widget.AppCompatTextView".equals(className)
-                                || "androidx.appcompat.widget.AppCompatImageView".equals(className)
-                                || "android.widget.FrameLayout".equals(className)
-                                || "androidx.appcompat.view.menu.ActionMenuItemView".equals(className)
-                                || "androidx.core.widget.ContentLoadingProgressBar".equals(className)
-                                || "androidx.appcompat.widget.AppCompatButton".equals(className)
 
-                        ) {
-                            return; // 処理をスキップ
+                        if (Arrays.asList(
+                                "android.widget.TextView",
+                                "android.widget.ImageView",
+                                "android.widget.Space",
+                                "androidx.appcompat.widget.AppCompatTextView",
+                                "androidx.appcompat.widget.AppCompatImageView",
+                                "android.widget.FrameLayout",
+                                "androidx.appcompat.view.menu.ActionMenuItemView",
+                                "androidx.core.widget.ContentLoadingProgressBar",
+                                "androidx.appcompat.widget.AppCompatButton"
+                        ).contains(className)) {
+                            return;
                         }
-                        if (excludeSet.contains(className)) {
-                            shouldHide = false;
-                        } else {
 
-                            shouldHide = containsSet.stream().anyMatch(className::contains) ||
-                                    exactMatchSet.contains(className);
+                        if (!excludeSet.contains(className)) {
+                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
+                        }
+
+                        if (!excludeSet.contains(resourceName)) {
+                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
                         }
 
                         if (shouldHide) {
@@ -162,7 +178,10 @@ public class Main implements IXposedHookLoadPackage {
                             if (layoutParams != null) {
                                 layoutParams.height = 0;
                                 view.setLayoutParams(layoutParams);
-                                XposedBridge.log("Ad view hidden on attach: " + className);
+                                if (isLoggingEnabled()) {
+                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
+
+                                }
                             }
                         }
                     }
@@ -180,34 +199,48 @@ public class Main implements IXposedHookLoadPackage {
                         String resourceName = getResourceName(view, context.getResources());
 
                         boolean shouldHide = false;
-                        if ("android.widget.TextView".equals(className)
-                                || "android.widget.ImageView".equals(className)
-                                || "android.widget.Space".equals(className)
-                                || "androidx.appcompat.widget.AppCompatTextView".equals(className)
-                                || "androidx.appcompat.widget.AppCompatImageView".equals(className)
-                                || "android.widget.FrameLayout".equals(className)
-                                || "androidx.appcompat.view.menu.ActionMenuItemView".equals(className)
-                                || "androidx.core.widget.ContentLoadingProgressBar".equals(className)
-                                || "androidx.appcompat.widget.AppCompatButton".equals(className)
 
-                        ) {
-                            return; // 処理をスキップ
+                        if (Arrays.asList(
+                                "android.widget.TextView",
+                                "android.widget.ImageView",
+                                "android.widget.Space",
+                                "androidx.appcompat.widget.AppCompatTextView",
+                                "androidx.appcompat.widget.AppCompatImageView",
+                                "android.widget.FrameLayout",
+                                "androidx.appcompat.view.menu.ActionMenuItemView",
+                                "androidx.core.widget.ContentLoadingProgressBar",
+                                "androidx.appcompat.widget.AppCompatButton"
+                        ).contains(className)) {
+                            return;
                         }
+
                         checkAndChangeBackgroundColor(context, view, loadPackageParam.packageName);
-                        XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
-                        XposedBridge.log("Current containsSet: " + containsSet);
+                        if (isLoggingEnabled()) {
+                            XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
+                            XposedBridge.log("Current containsSet: " + containsSet);
+                        }
 
                         if (className != null) {
-
                             boolean isExcluded = excludeSet.stream().anyMatch(className::contains);
                             boolean isExcludedBySuffix = excludeSet.stream().anyMatch(className::endsWith);
 
                             if (isExcluded || isExcludedBySuffix) {
                                 shouldHide = false;
                             } else {
-                                // containsSetまたはexactMatchSetに基づいて表示を決定
+
                                 shouldHide = containsSet.stream().anyMatch(className::contains) ||
                                         exactMatchSet.contains(className);
+                            }
+                        }
+
+                        if (resourceName != null) {
+                            boolean isExcludedResource = excludeSet.stream().anyMatch(resourceName::contains);
+                            boolean isExcludedResourceBySuffix = excludeSet.stream().anyMatch(resourceName::endsWith);
+
+                            if (!(isExcludedResource || isExcludedResourceBySuffix)) {
+                                shouldHide = shouldHide ||
+                                        containsSet.stream().anyMatch(resourceName::contains) ||
+                                        exactMatchSet.contains(resourceName);
                             }
                         }
 
@@ -216,7 +249,9 @@ public class Main implements IXposedHookLoadPackage {
                             if (layoutParams != null) {
                                 layoutParams.height = 0;
                                 view.setLayoutParams(layoutParams);
-                                XposedBridge.log("Ad view hidden on attach: " + className);
+                                if (isLoggingEnabled()) {
+                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
+                                }
                             }
                         }
                     }
@@ -257,7 +292,9 @@ public class Main implements IXposedHookLoadPackage {
                             }
                     );
                 } catch (ClassNotFoundException e) {
-                    XposedBridge.log("Class not found: " + adClassName);
+                    if (isLoggingEnabled()) {
+                        XposedBridge.log("Class not found: " + adClassName);
+                    }
                 }
             }
         }
