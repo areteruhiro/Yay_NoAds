@@ -6,6 +6,7 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
@@ -55,6 +56,7 @@ public class Main implements IXposedHookLoadPackage {
     private Set<String> containsSet = new HashSet<>();
     private Set<String> exactMatchSet = new HashSet<>();
     private Set<String> excludeSet = new HashSet<>();
+    private Set<String> SkipColorSet = new HashSet<>();
     private static final String FILE_NAME = "log_settings.txt";
     private static final String DIRECTORY_NAME = "NoAd Module";
     private static boolean hasToastShown = false; // トースト表示済みフラグ
@@ -304,9 +306,9 @@ public class Main implements IXposedHookLoadPackage {
             String defaultConfig;
 
             if (packageName.equals("jp.co.airfront.android.a2chMate")) {
-                defaultConfig = "C:Ads,C;ads,C:ADs,E:o.onAdsExhausted";
+                defaultConfig = "C:Ads,C;ads,C:ADs,C:Ad,E:o.onAdsExhausted";
             } else {
-                defaultConfig = "C:Ads,C;ads,C:ADs"; // デフォルト値
+                defaultConfig = "C:Ads,C;ads,C:ADs,";
             }
 
             writer.write(defaultConfig);
@@ -371,6 +373,10 @@ public class Main implements IXposedHookLoadPackage {
                 exactMatchSet.add(trimmedEntry.substring(2).trim());
             } else if (trimmedEntry.startsWith("E:")) {
                 excludeSet.add(trimmedEntry.substring(2).trim());
+            } else if (trimmedEntry.startsWith("SK:")) {
+                // 小文字に変換して追加（大文字小文字を区別しないため）
+                String skipEntry = trimmedEntry.substring(2).trim().toLowerCase();
+                SkipColorSet.add(skipEntry);
             } else {
                 containsSet.add(trimmedEntry);
             }
@@ -423,9 +429,21 @@ public class Main implements IXposedHookLoadPackage {
             if (resourceName == null || resourceName.isEmpty()) {
                 resourceName = view.getClass().getName();
             }
+
             String viewClassName = view.getClass().getName();
+            String viewClassNameLower = viewClassName.toLowerCase();
+
+// SkipColorSetチェック
+            for (String skipPattern : SkipColorSet) {
+                if (viewClassNameLower.contains(skipPattern)) {
+                    XposedBridge.log("Skipped view by SkipColorSet [Pattern: " + skipPattern + "]: " + viewClassName);
+                    return;
+                }
+            }
+
+// 元のdispatchTouchEventチェック（必要に応じて残す）
             if (resourceName.toLowerCase().contains("dispatchtouchevent") ||
-                    viewClassName.toLowerCase().contains("dispatchtouchevent")) {
+                    viewClassNameLower.contains("dispatchtouchevent")) {
                 XposedBridge.log("Skipped dispatchTouchEvent related view: " + resourceName);
                 return;
             }
@@ -541,7 +559,23 @@ public class Main implements IXposedHookLoadPackage {
     private Bitmap createColorBitmap(int width, int height, int color) {
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(color);
+
+
+        float size = Math.min(width, height) * 0.2f;
+
+        float margin = Math.min(width, height) * 0.1f;
+        float left = width - size - margin;
+        float top = margin;
+        float right = width - margin;
+        float bottom = margin + size;
+
+        Paint paint = new Paint();
+        paint.setColor(color);
+        paint.setAntiAlias(true);
+        paint.setStyle(Paint.Style.FILL);
+
+        canvas.drawRect(left, top, right, bottom, paint);
+
         return bitmap;
     }
     private void writeLogToFile(Context context, String packageName, String resourceName, String colorCode, String className, String backgroundType) {
