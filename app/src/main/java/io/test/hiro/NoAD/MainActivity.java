@@ -208,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private File getLogFile() {
-        return new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), DIRECTORY_NAME + File.separator + "log.txt");
+        return new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), DIRECTORY_NAME + File.separator + "log_settings.txt");
     }
 
     private void restartApp() {

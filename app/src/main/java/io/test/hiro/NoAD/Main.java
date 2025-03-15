@@ -369,6 +369,7 @@ public class Main implements IXposedHookLoadPackage {
     private Set<String> changedResources = new HashSet<>();
     private boolean isChangingColor = false;
 
+
     private void checkAndChangeBackgroundColor(Context context, View view, String packageName) {
         try {
             if ("com.google.android.webview".equals(packageName) || "com.google.android.gms".equals(packageName)) {
@@ -383,13 +384,17 @@ public class Main implements IXposedHookLoadPackage {
             isChangingColor = true;
             String resourceName = getViewResourceName(view);
             if (resourceName == null || resourceName.isEmpty()) {
-                // リソース名が見つからない場合は、クラス名を使用する
                 resourceName = view.getClass().getName();
             }
+            String viewClassName = view.getClass().getName();
+            if (resourceName.toLowerCase().contains("dispatchtouchevent") ||
+                    viewClassName.toLowerCase().contains("dispatchtouchevent")) {
+                XposedBridge.log("Skipped dispatchTouchEvent related view: " + resourceName);
+                return;
+            }
 
-            // 既に変更済みのリソースかどうかを確認
             if (changedResources.contains(resourceName)) {
-                return; // 変更済みリソースの場合は処理を終了
+                return;
             }
 
             Drawable background = view.getBackground();
@@ -397,35 +402,61 @@ public class Main implements IXposedHookLoadPackage {
                 XposedBridge.log("Background Class Name: " + background.getClass().getName());
 
                 if (background instanceof ColorDrawable) {
-                    // 背景が ColorDrawable の場合、色を変更
+                    // ColorDrawableの場合の処理
                     Random random = new Random();
                     int randomColor = Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256));
                     ((ColorDrawable) background).setColor(randomColor);
                     changedResources.add(resourceName);
 
                     String colorCode = String.format("#%06X", (0xFFFFFF & randomColor));
-                    String viewClassName = view.getClass().getName();
                     XposedBridge.log("Changed Background Color of Resource Name: " + resourceName + " (Class: " + viewClassName + ") to " + colorCode);
 
                     if (isLoggingEnabled()) {
-                        writeLogToFile(context, packageName, resourceName, colorCode, viewClassName, null);
+                        writeLogToFile(context, packageName, resourceName, colorCode, viewClassName, "ColorDrawable");
                     }
                 } else {
+                    // その他のDrawableタイプの場合の処理
                     String backgroundInfo = "Unknown";
                     if (background instanceof BitmapDrawable) {
                         backgroundInfo = "BitmapDrawable";
                     } else if (background instanceof GradientDrawable) {
                         backgroundInfo = "GradientDrawable";
                     }
-                    String viewClassName = view.getClass().getName();
-                    XposedBridge.log("Background Type: " + backgroundInfo + " for Resource Name: " + resourceName);
 
-                    if (isLoggingEnabled()) {
-                        writeLogToFile(context, packageName, resourceName, null, viewClassName, backgroundInfo);
-                    }
+                    XposedBridge.log("Modifying Background Type: " + backgroundInfo + " for Resource Name: " + resourceName);
+
+                    int randomColor = getRandomColor();
+                    String colorCode = String.format("#%06X", (0xFFFFFF & randomColor));
+                    final String finalResourceName = resourceName;
+                    final String finalViewClassName = viewClassName;
+                    final String finalBackgroundInfo = backgroundInfo;
+
+                    view.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                        @Override
+                        public void onGlobalLayout() {
+                            int width = view.getWidth();
+                            int height = view.getHeight();
+
+                            if (width <= 0 || height <= 0) {
+                                width = 100;
+                                height = 100;
+                            }
+
+                            Bitmap colorBitmap = createColorBitmap(width, height, randomColor);
+                            view.setBackground(new BitmapDrawable(context.getResources(), colorBitmap));
+                            changedResources.add(finalResourceName);
+
+                            XposedBridge.log("Set random color background for Resource Name: " + finalResourceName + " (Class: " + finalViewClassName + ") to " + colorCode);
+
+                            if (isLoggingEnabled()) {
+                                writeLogToFile(context, packageName, finalResourceName, colorCode, finalViewClassName, finalBackgroundInfo + "_modified");
+                            }
+
+                            view.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                        }
+                    });
                 }
             } else {
-                String viewClassName = view.getClass().getName();
                 XposedBridge.log("Background is null for Resource Name: " + resourceName);
                 if (isLoggingEnabled()) {
                     writeLogToFile(context, packageName, resourceName, null, viewClassName, "null");
@@ -451,7 +482,10 @@ public class Main implements IXposedHookLoadPackage {
                         String colorCode = String.format("#%06X", (0xFFFFFF & randomColor));
                         XposedBridge.log("Set random color background for Resource Name: " + finalResourceName + " (Class: " + viewClassName + ") to " + colorCode);
 
-                        // リスナーを削除
+                        if (isLoggingEnabled()) {
+                            writeLogToFile(context, packageName, finalResourceName, colorCode, viewClassName, "generated_bitmap");
+                        }
+
                         view.getViewTreeObserver().removeOnGlobalLayoutListener(this);
                     }
                 });
@@ -462,7 +496,6 @@ public class Main implements IXposedHookLoadPackage {
             isChangingColor = false;
         }
     }
-
     private int getRandomColor() {
         Random random = new Random();
         return Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256));
