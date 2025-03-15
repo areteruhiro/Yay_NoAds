@@ -94,7 +94,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:text="C:含む  M:完全一致  E:除外\n※設定後は対象アプリを再起動"
+        android:text="C:含む  M:完全一致  E:除外\n※設定後は対象アプリを再起動\nファイルが見つからない場合は先に対象アプリを開いてください"
         android:textColor="#666666"
         android:textSize="12sp"
         android:lineSpacingExtra="4dp"/>
