@@ -346,7 +346,7 @@ public class Main implements IXposedHookLoadPackage {
                                     XposedBridge.log(e);
                                 }
                                 try {
-                                    String className = "C:" + adView.getClass().getName();
+                                    String className = ",C:" + adView.getClass().getName();
 
                                     boolean alreadyExists = false;
                                     if (configFile.exists()) {
@@ -381,9 +381,9 @@ public class Main implements IXposedHookLoadPackage {
 
             }
             return;
-            } catch(ClassNotFoundException e){
-                XposedBridge.log("Fragment class not found: " + e.getMessage());
-            }
+        } catch(ClassNotFoundException e){
+            XposedBridge.log("Fragment class not found: " + e.getMessage());
+        }
 
     }
 
@@ -393,7 +393,7 @@ public class Main implements IXposedHookLoadPackage {
 
             if (packageName.equals("jp.co.airfront.android.a2chMate")) {
 
-                defaultConfig = "C:Ads,C;ads,C:ADs,C:Ad,E:o.onAdsExhausted";
+                defaultConfig = "C:Ads,C;ads,C:ADs,C:AdView,E:o.onAdsExhausted";
             } else {
                 defaultConfig = "C:Ads,C;ads,C:ADs,";
             }
