@@ -2,6 +2,8 @@ package io.test.hiro.NoAD;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -15,6 +17,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -22,6 +25,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.ScrollView;
@@ -39,11 +43,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -61,7 +67,8 @@ public class Main implements IXposedHookLoadPackage {
     private static final String DIRECTORY_NAME = "NoAd Module";
     private static boolean hasToastShown = false; // トースト表示済みフラグ
     private static final String PREF_NAME = "ad_prefs";  // SharedPreferencesファイル名
-
+    private Class<?> adClass;
+    private final Set<Class<?>> adClasses = new HashSet<>();
     @Override
     public void handleLoadPackage(@NonNull XC_LoadPackage.LoadPackageParam loadPackageParam) throws Throwable {
         String packageName = loadPackageParam.packageName;
@@ -86,6 +93,7 @@ public class Main implements IXposedHookLoadPackage {
                         if (!hasToastShown) {
                             try {
                                 loadAdClassesFromPreferences(context, packageName);
+                                setupXposedHooks(context, packageName);
                                 hasToastShown = true;
                                 if (isLoggingEnabled()) {
 
@@ -301,11 +309,90 @@ public class Main implements IXposedHookLoadPackage {
             }
         }
     }
+
+
+    private void setupXposedHooks(Context context, String packageName) {
+        try {
+            if (packageName.equals("jp.co.airfront.android.a2chMate")) {
+                final ClassLoader classLoader = context.getClassLoader();
+                File configFile = new File(
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                        "NoAd Module/" + packageName + "_ad_config.txt"
+                );
+
+                final AtomicBoolean seen = new AtomicBoolean(false);
+                XposedBridge.hookAllMethods(
+                        classLoader.loadClass("androidx.fragment.app.Fragment"),
+                        "onViewCreated",
+                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (seen.get() || param.args[0] == null) return;
+                                if (!(param.args[0] instanceof ViewGroup)) return;
+
+                                ViewGroup viewGroup = (ViewGroup) param.args[0];
+                                if (viewGroup.getChildCount() < 3) return;
+
+                                View adView = viewGroup.getChildAt(viewGroup.getChildCount() - 3);
+                                if (!(adView instanceof FrameLayout)) return;
+                                seen.set(true);
+                                if (adClasses.contains(adView.getClass())) return;
+
+                                try {
+                                    Method mAddAssetPath = AssetManager.class.getDeclaredMethod(
+                                            "addAssetPath", String.class);
+                                    mAddAssetPath.setAccessible(true);
+                                } catch (Exception e) {
+                                    XposedBridge.log(e);
+                                }
+                                try {
+                                    String className = "C:" + adView.getClass().getName();
+
+                                    boolean alreadyExists = false;
+                                    if (configFile.exists()) {
+                                        try (BufferedReader reader = new BufferedReader(
+                                                new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8))) {
+                                            String line;
+                                            while ((line = reader.readLine()) != null) {
+                                                if (line.trim().equals(className)) {
+                                                    alreadyExists = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (!alreadyExists) {
+                                        try (BufferedWriter writer = new BufferedWriter(
+                                                new OutputStreamWriter(new FileOutputStream(configFile, true), StandardCharsets.UTF_8))) {
+                                            writer.write(className);
+                                            writer.newLine();
+                                            writer.flush();
+                                            XposedBridge.log("Ad class appended to config: " + className);
+                                            android.os.Process.killProcess(Process.myPid());
+                                        }
+                                    }
+                                } catch (IOException e) {
+                                    XposedBridge.log("Failed to update config file: " + e.getMessage());
+                                }
+                            }
+                        }
+                );
+
+            }
+            return;
+            } catch(ClassNotFoundException e){
+                XposedBridge.log("Fragment class not found: " + e.getMessage());
+            }
+
+    }
+
     private void writeDefaultConfig(File configFile, String packageName) {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8))) {
             String defaultConfig;
 
             if (packageName.equals("jp.co.airfront.android.a2chMate")) {
+
                 defaultConfig = "C:Ads,C;ads,C:ADs,C:Ad,E:o.onAdsExhausted";
             } else {
                 defaultConfig = "C:Ads,C;ads,C:ADs,";
@@ -320,19 +407,16 @@ public class Main implements IXposedHookLoadPackage {
         }
     }
     private void loadAdClassesFromPreferences(Context context, String packageName) {
-        // パッケージ名に基づいたファイル名を作成
         File configFile = new File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "NoAd Module/" + packageName + "_ad_config.txt" // パッケージ名をファイル名に追加
+                "NoAd Module/" + packageName + "_ad_config.txt"
         );
-
         try {
             File parentDir = configFile.getParentFile();
             if (!parentDir.exists() && !parentDir.mkdirs()) {
                 XposedBridge.log("Failed to create directory: " + parentDir.getAbsolutePath());
                 return;
             }
-
             if (!configFile.exists()) {
                 if (configFile.createNewFile()) {
                     XposedBridge.log("Created new config file: " + configFile.getAbsolutePath());
