@@ -1,22 +1,9 @@
 # NoAds
-
-https://youtube.com/shorts/fak1zHt7TUM
-
-（使い方）
-
 ## 標準で典型的な広告リソース名は対応しています。
 
 
-## 消えない広告などは以下の機能をご利用ください
-Enableをオンにすると、
-download/Ad_Name
-に、アプリごとのリソース名が書き込まれるファイルが作成されます。
-そこに書いてるclass nameまたはResources name を
-真ん中に記入します。
-複数個ある場合は、 ,で区切ります。
-
-
-リソース名が書き込まれなくなった場合、そのファイルを一度削除してください
+credit
+https://github.com/Chipppppppppp/Binnosoko
 
 (How to use)
 
