@@ -75,317 +75,155 @@ public class Main implements IXposedHookLoadPackage {
         if ("io.test.hiro.NoAD".equals(packageName)) {
             return;
         }
-
-        XposedHelpers.findAndHookMethod(
-                ViewGroup.class,
-                "addView",
-                View.class,
-                ViewGroup.LayoutParams.class,
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        View view = (View) param.args[0];
-                        Context context = view.getContext();
-                        String className = view.getClass().getName();
-                        Resources resources = context.getResources();
-                        String resourceName = getResourceName(view, resources);
-
-                        if (!hasToastShown) {
-                            try {
-                                loadAdClassesFromPreferences(context, packageName);
-                                setupXposedHooks(context, packageName);
-                                hasToastShown = true;
-                                if (isLoggingEnabled()) {
-
-
-                                    XposedBridge.log("Ad detection popup displayed");
-                                }
-
-                            } catch (Exception e) {
-                                if (isLoggingEnabled()) {
-                                    Toast.makeText(context, "Ad detection activated", Toast.LENGTH_SHORT).show();
-                                }
-                            }
-                        }
-
-                        // 特定のクラス名をスキップ
-                        if (Arrays.asList(
-                                "android.widget.TextView",
-                                "android.widget.ImageView",
-                                "android.widget.Space",
-                                "androidx.appcompat.widget.AppCompatTextView",
-                                "androidx.appcompat.widget.AppCompatImageView",
-                                "android.widget.FrameLayout",
-                                "androidx.appcompat.view.menu.ActionMenuItemView",
-                                "androidx.core.widget.ContentLoadingProgressBar",
-                                "androidx.appcompat.widget.AppCompatButton"
-                        ).contains(className)) {
-                            return; // 処理をスキップ
-                        }
-
-                        checkAndChangeBackgroundColor(context, view, packageName);
-
-                        if ("com.google.android.webview".equals(packageName) || "com.google.android.gms".equals(packageName)) {
+    if ("com.google.android.webview".equals(packageName) || "com.google.android.gms".equals(packageName)) {
                             return;
                         }
 
-                        boolean shouldHide = false;
 
-                        // クラス名に基づくチェック
-                        if (!excludeSet.contains(className)) {
-                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
-                        }
+//        XposedBridge.hookAllMethods(
+//                View.class,
+//                "onAttachedToWindow",
+//                new XC_MethodHook() {
+//                    @Override
+//                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+//                        View view = (View) param.thisObject;
+//                        Context context = view.getContext();
+//                        String className = view.getClass().getName();
+//                        String resourceName = getResourceName(view, context.getResources());
+//                        boolean shouldHide = false;
+//
+//                        if (Arrays.asList(
+//                                "android.widget.TextView",
+//                                "android.widget.ImageView",
+//                                "android.widget.Space",
+//                                "androidx.appcompat.widget.AppCompatTextView",
+//                                "androidx.appcompat.widget.AppCompatImageView",
+//                                "android.widget.FrameLayout",
+//                                "androidx.appcompat.view.menu.ActionMenuItemView",
+//                                "androidx.core.widget.ContentLoadingProgressBar",
+//                                "androidx.appcompat.widget.AppCompatButton"
+//                        ).contains(className)) {
+//                            return;
+//                        }
+//
+//                        if (!excludeSet.contains(className)) {
+//                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
+//                        }
+//
+//                        if (!excludeSet.contains(resourceName)) {
+//                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
+//                        }
+//
+//                        if (shouldHide) {
+//                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+//                            if (layoutParams != null) {
+//                                layoutParams.height = 0;
+//                                view.setLayoutParams(layoutParams);
+//                                if (isLoggingEnabled()) {
+//                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
+//
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//        );
 
-                        // リソース名に基づくチェック
-                        if (!excludeSet.contains(resourceName)) {
-                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
-                        }
+            XposedHelpers.findAndHookMethod("android.view.View", loadPackageParam.classLoader, "onAttachedToWindow",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 
-                        // ビューを非表示にする
-                        if (shouldHide && view.getVisibility() != View.GONE) {
-                            view.setVisibility(View.GONE);
-                        }
-                    }
-                }
-        );
-
-        XposedBridge.hookAllMethods(
-                View.class,
-                "onAttachedToWindow",
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        View view = (View) param.thisObject;
-                        Context context = view.getContext();
-                        String className = view.getClass().getName();
-                        String resourceName = getResourceName(view, context.getResources());
-                        boolean shouldHide = false;
-
-                        if (Arrays.asList(
-                                "android.widget.TextView",
-                                "android.widget.ImageView",
-                                "android.widget.Space",
-                                "androidx.appcompat.widget.AppCompatTextView",
-                                "androidx.appcompat.widget.AppCompatImageView",
-                                "android.widget.FrameLayout",
-                                "androidx.appcompat.view.menu.ActionMenuItemView",
-                                "androidx.core.widget.ContentLoadingProgressBar",
-                                "androidx.appcompat.widget.AppCompatButton"
-                        ).contains(className)) {
-                            return;
-                        }
-
-                        if (!excludeSet.contains(className)) {
-                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
-                        }
-
-                        if (!excludeSet.contains(resourceName)) {
-                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
-                        }
-
-                        if (shouldHide) {
-                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-                            if (layoutParams != null) {
-                                layoutParams.height = 0;
-                                view.setLayoutParams(layoutParams);
-                                if (isLoggingEnabled()) {
-                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
-
-                                }
+                            View view = (View) param.thisObject;
+                            Context context = view.getContext();
+                            String className = view.getClass().getName();
+                            String resourceName = getResourceName(view, context.getResources());
+                            if (isLoggingEnabled()) {
+                                checkAndChangeBackgroundColor(context, view, loadPackageParam.packageName);
+                                return;
                             }
-                        }
-                    }
-                }
-        );
 
-
-        XposedHelpers.findAndHookMethod("android.view.View", loadPackageParam.classLoader, "onAttachedToWindow",
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        View view = (View) param.thisObject;
-                        Context context = view.getContext();
-                        String className = view.getClass().getName();
-                        String resourceName = getResourceName(view, context.getResources());
-
-                        boolean shouldHide = false;
-
-                        if (Arrays.asList(
-                                "android.widget.TextView",
-                                "android.widget.ImageView",
-                                "android.widget.Space",
-                                "androidx.appcompat.widget.AppCompatTextView",
-                                "androidx.appcompat.widget.AppCompatImageView",
-                                "android.widget.FrameLayout",
-                                "androidx.appcompat.view.menu.ActionMenuItemView",
-                                "androidx.core.widget.ContentLoadingProgressBar",
-                                "androidx.appcompat.widget.AppCompatButton"
-                        ).contains(className)) {
-                            return;
-                        }
-
-                        checkAndChangeBackgroundColor(context, view, loadPackageParam.packageName);
-                        if (isLoggingEnabled()) {
-                            XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
-                            XposedBridge.log("Current containsSet: " + containsSet);
-                        }
-
-                        if (className != null) {
-                            boolean isExcluded = excludeSet.stream().anyMatch(className::contains);
-                            boolean isExcludedBySuffix = excludeSet.stream().anyMatch(className::endsWith);
-
-                            if (isExcluded || isExcludedBySuffix) {
-                                shouldHide = false;
-                            } else {
-
-                                shouldHide = containsSet.stream().anyMatch(className::contains) ||
-                                        exactMatchSet.contains(className);
-                            }
-                        }
-
-                        if (resourceName != null) {
-                            boolean isExcludedResource = excludeSet.stream().anyMatch(resourceName::contains);
-                            boolean isExcludedResourceBySuffix = excludeSet.stream().anyMatch(resourceName::endsWith);
-
-                            if (!(isExcludedResource || isExcludedResourceBySuffix)) {
-                                shouldHide = shouldHide ||
-                                        containsSet.stream().anyMatch(resourceName::contains) ||
-                                        exactMatchSet.contains(resourceName);
-                            }
-                        }
-
-                        if (shouldHide) {
-                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-                            if (layoutParams != null) {
-                                layoutParams.height = 0;
-                                view.setLayoutParams(layoutParams);
-                                if (isLoggingEnabled()) {
-                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
-                                }
-                            }
-                        }
-                    }
-                }
-        );
-        for (Object adClass : containsSet) {
-            if (adClass instanceof String) {
-                String adClassName = (String) adClass;
-                try {
-                    Class<?> clazz = loadPackageParam.classLoader.loadClass(adClassName);
-                    XposedBridge.hookAllConstructors(
-                            clazz,
-                            new XC_MethodHook() {
-                                @Override
-                                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                                    if (param.thisObject instanceof View) {
-                                        View view = (View) param.thisObject;
-                                        Context context = view.getContext();
-
-
-                                        if (!excludeSet.contains(adClassName)) {
-
-                                            view.setVisibility(View.GONE);
-
-                                            view.getViewTreeObserver().addOnGlobalLayoutListener(
-                                                    new ViewTreeObserver.OnGlobalLayoutListener() {
-                                                        @Override
-                                                        public void onGlobalLayout() {
-                                                            if (view.getVisibility() != View.GONE) {
-                                                                view.setVisibility(View.GONE);
-                                                            }
-                                                        }
-                                                    }
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                    );
-                } catch (ClassNotFoundException e) {
-                    if (isLoggingEnabled()) {
-                        XposedBridge.log("Class not found: " + adClassName);
-                    }
-                }
-            }
-        }
-    }
-
-
-    private void setupXposedHooks(Context context, String packageName) {
-        try {
-            if (packageName.equals("jp.co.airfront.android.a2chMate")) {
-                final ClassLoader classLoader = context.getClassLoader();
-                File configFile = new File(
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                        "NoAd Module/" + packageName + "_ad_config.txt"
-                );
-
-                final AtomicBoolean seen = new AtomicBoolean(false);
-                XposedBridge.hookAllMethods(
-                        classLoader.loadClass("androidx.fragment.app.Fragment"),
-                        "onViewCreated",
-                        new XC_MethodHook() {
-                            @Override
-                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                                if (seen.get() || param.args[0] == null) return;
-                                if (!(param.args[0] instanceof ViewGroup)) return;
-
-                                ViewGroup viewGroup = (ViewGroup) param.args[0];
-                                if (viewGroup.getChildCount() < 3) return;
-
-                                View adView = viewGroup.getChildAt(viewGroup.getChildCount() - 3);
-                                if (!(adView instanceof FrameLayout)) return;
-                                seen.set(true);
-                                if (adClasses.contains(adView.getClass())) return;
-
+                            boolean shouldHide = false;
+                            if (!hasToastShown) {
                                 try {
-                                    Method mAddAssetPath = AssetManager.class.getDeclaredMethod(
-                                            "addAssetPath", String.class);
-                                    mAddAssetPath.setAccessible(true);
+                                    loadAdClassesFromPreferences(context, packageName);
+                                    hasToastShown = true;
+                                    if (isLoggingEnabled()) {
+                                        XposedBridge.log("Ad detection popup displayed");
+                                    }
                                 } catch (Exception e) {
-                                    XposedBridge.log(e);
-                                }
-                                try {
-                                    String className = ",C:" + adView.getClass().getName();
-
-                                    boolean alreadyExists = false;
-                                    if (configFile.exists()) {
-                                        try (BufferedReader reader = new BufferedReader(
-                                                new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8))) {
-                                            String line;
-                                            while ((line = reader.readLine()) != null) {
-                                                if (line.trim().equals(className)) {
-                                                    alreadyExists = true;
-                                                    break;
-                                                }
-                                            }
-                                        }
+                                    if (isLoggingEnabled()) {
+                                        Toast.makeText(context, "Ad detection activated", Toast.LENGTH_SHORT).show();
                                     }
-
-                                    if (!alreadyExists) {
-                                        try (BufferedWriter writer = new BufferedWriter(
-                                                new OutputStreamWriter(new FileOutputStream(configFile, true), StandardCharsets.UTF_8))) {
-                                            writer.write(className);
-                                            writer.newLine();
-                                            writer.flush();
-                                            XposedBridge.log("Ad class appended to config: " + className);
-                                            android.os.Process.killProcess(Process.myPid());
-                                        }
-                                    }
-                                } catch (IOException e) {
-                                    XposedBridge.log("Failed to update config file: " + e.getMessage());
                                 }
                             }
+                            if (Arrays.asList(
+                                    "android.widget.TextView",
+                                    "android.widget.ImageView",
+                                    "android.widget.Space",
+                                    "androidx.appcompat.widget.AppCompatTextView",
+                                    "androidx.appcompat.widget.AppCompatImageView",
+                                    "android.widget.FrameLayout",
+                                    "androidx.appcompat.view.menu.ActionMenuItemView",
+                                    "androidx.core.widget.ContentLoadingProgressBar",
+                                    "androidx.appcompat.widget.AppCompatButton").
+                                    contains(className)) {
+                                return;
+                            }
+                            if (isLoggingEnabled()) {
+                                XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
+                                XposedBridge.log("Current containsSet: " + containsSet);
+                            }
+                                boolean isExcluded = excludeSet.stream().anyMatch(className::contains);
+                                boolean isExcludedBySuffix = excludeSet.stream().anyMatch(className::endsWith);
+                                if (isExcluded || isExcludedBySuffix) {
+                                } else {
+                                    shouldHide = containsSet.stream().anyMatch(className::contains) ||
+                                            exactMatchSet.contains(className);
+                                }
+                            if (!excludeSet.contains(className)) {
+                                shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
+                            }
+                            if (shouldHide) {
+                                ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+                                if (layoutParams != null) {
+                                    layoutParams.height = 0;
+                                    view.setLayoutParams(layoutParams);
+                                    if (isLoggingEnabled()) {
+                                        XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
+                                    }
+                                }
+                            }
+/*
+                            // リソース名に基づくチェック
+                            if (!excludeSet.contains(resourceName)) {
+                                shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
+                            }
+                            */
+//                            // ビューを非表示にする
+//                            if (shouldHide && view.getVisibility() != View.GONE) {
+//                                view.setVisibility(View.GONE);
+//                                return;
+//                            }
+                            /*
+                            if (resourceName != null) {
+                                boolean isExcludedResource = excludeSet.stream().anyMatch(resourceName::contains);
+                                boolean isExcludedResourceBySuffix = excludeSet.stream().anyMatch(resourceName::endsWith);
+
+                                if (!(isExcludedResource || isExcludedResourceBySuffix)) {
+                                    shouldHide = shouldHide ||
+                                            containsSet.stream().anyMatch(resourceName::contains) ||
+                                            exactMatchSet.contains(resourceName);
+                                }
+                            }
+                             */
+
                         }
-                );
-
-            }
-            return;
-        } catch(ClassNotFoundException e){
-            XposedBridge.log("Fragment class not found: " + e.getMessage());
-        }
-
+                    }
+            );
     }
+
+
 
     private void writeDefaultConfig(File configFile, String packageName) {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8))) {
@@ -500,9 +338,6 @@ public class Main implements IXposedHookLoadPackage {
     private void checkAndChangeBackgroundColor(Context context, View view, String packageName) {
         try {
             if ("com.google.android.webview".equals(packageName) || "com.google.android.gms".equals(packageName)) {
-                return;
-            }
-            if (!isLoggingEnabled()) {
                 return;
             }
             if (isChangingColor) {
