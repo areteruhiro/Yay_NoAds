@@ -10,7 +10,7 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 20
-        versionName "4.5"
+        versionName "5"
         proguardFiles += 'proguard-rules.pro'
         multiDexEnabled false
         vectorDrawables {
@@ -60,10 +60,7 @@ android {
 }
 
 dependencies {
-     implementation 'com.android.support:customtabs:23.0.0'
-    compileOnly 'de.robv.android.xposed:api:82'
-    implementation 'org.mozilla:rhino:1.7.15'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.0' // バージョンはプロジェクトに合わせて調整
-    implementation "androidx.work:work-runtime:2.10.0"
-    implementation 'com.google.android.material:material:1.9.0' // バージョンを最新に合わせてください
+    compileOnly libs.api
+    implementation libs.rhino
+    implementation libs.material.v190
 }
