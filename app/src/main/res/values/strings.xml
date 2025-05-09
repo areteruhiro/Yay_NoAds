@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">YAY_NoAds</string>
+    <string name="xposed_desc">NoADs</string>
+    <string name="restarting">Ch.restart</string>
+
+
+</resources>
