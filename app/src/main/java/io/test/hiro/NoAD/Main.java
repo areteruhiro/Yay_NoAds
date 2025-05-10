@@ -205,44 +205,40 @@ public class Main implements IXposedHookLoadPackage {
                             int viewId = view.getId();
 
 
-//                            String viewText = "";
-//                            if (view instanceof TextView) {
-//                                viewText = ((TextView) view).getText().toString();
-//                            }
-
-//                            String resourceName = "";
-//                            try {
-//                                resourceName = view.getResources().getResourceName(viewId);
-//                            } catch (Resources.NotFoundException ignored) {
-//                                resourceName = "UNKNOWN_RESOURCE";
-//                            }
-
+                            String viewText = "";
+                            if (view instanceof TextView) {
+                                viewText = ((TextView) view).getText().toString();
+                            }
+                            String resourceName = "";
+                            try {
+                                resourceName = view.getResources().getResourceName(viewId);
+                            } catch (Resources.NotFoundException ignored) {
+                                resourceName = "UNKNOWN_RESOURCE";
+                            }
                             ViewGroup.LayoutParams params = view.getLayoutParams();
-//                            String sizeInfo = (params != null)
-//                                    ? "width=" + params.width + ", height=" + params.height
-//                                    : "NO_LAYOUT_PARAMS";
+                            String sizeInfo = (params != null)
+                                    ? "width=" + params.width + ", height=" + params.height
+                                    : "NO_LAYOUT_PARAMS";
+                            String parentInfo = (view.getParent() instanceof ViewGroup)
+                                    ? "Parent: " + view.getParent().getClass().getSimpleName()
+                                    : "NO_PARENT_VIEW";
+                            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+                            StringBuilder stackTraceStr = new StringBuilder();
+                            for (int i = 3; i < stackTrace.length && i < 30; i++) {
+                                stackTraceStr.append("  at ").append(stackTrace[i].toString()).append("\n");
+                            }
 
-//                            String parentInfo = (view.getParent() instanceof ViewGroup)
-//                                    ? "Parent: " + view.getParent().getClass().getSimpleName()
-//                                    : "NO_PARENT_VIEW";
-
-//                            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-//                            StringBuilder stackTraceStr = new StringBuilder();
-//                            for (int i = 3; i < stackTrace.length && i < 30; i++) {
-//                                stackTraceStr.append("  at ").append(stackTrace[i].toString()).append("\n");
-//                            }
-//
-//                            XposedBridge.log(
-//                                    "[View Added]\n" +
-//                                            "  Class: " + className + "\n" +
-//                                            "  Hash: " + viewHash + "\n" +
-//                                            "  ID: " + resourceName + " (" + viewId + ")\n" +
-//                                            "  Text: \"" + viewText + "\"\n" +
-//                                            "  Size: " + sizeInfo + "\n" +
-//                                            "  " + parentInfo + "\n" +
-//                                            "  StackTrace:\n" + stackTraceStr.toString() +
-//                                            "----------------------------------------"
-//                            );
+                            XposedBridge.log(
+                                    "[View Added]\n" +
+                                            "  Class: " + className + "\n" +
+                                            "  Hash: " + viewHash + "\n" +
+                                            "  ID: " + resourceName + " (" + viewId + ")\n" +
+                                            "  Text: \"" + viewText + "\"\n" +
+                                            "  Size: " + sizeInfo + "\n" +
+                                            "  " + parentInfo + "\n" +
+                                            "  StackTrace:\n" + stackTraceStr.toString() +
+                                            "----------------------------------------"
+                            );
 
                             boolean shouldHide = false;
 
@@ -290,52 +286,36 @@ public class Main implements IXposedHookLoadPackage {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
                         View view = (View) param.args[0];
-                        if (view != null && view.getClass().getName().equals("com.google.android.gms.ads.nativead.MediaView")||view.getClass().getName().equals("com.google.android.gms.ads.nativead.NativeAdView")||view.getClass().getName().equals("works.jubilee.timetree.ui.mainstreet.l")) {
+                        Context context = view.getContext();
+                        Resources res = context.getResources();
+                        String resourceName = "";
+                        boolean isAdView = false;
+
+                        // リソース名の取得（安全に）
+                        try {
+                            resourceName = res.getResourceName(view.getId());
+                        } catch (Resources.NotFoundException e) {
+                            resourceName = "unknown";
+                        }
+                        if (view != null && view.getClass().getName().equals("com.google.android.gms.ads.nativead.MediaView")
+                                ||view.getClass().getName().equals("com.google.android.gms.ads.nativead.NativeAdView")
+                                ||view.getClass().getName().equals("works.jubilee.timetree.ui.mainstreet.l")
+                                || resourceName.contains("event_ad")
+
+                        ) {
+                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+                            if (layoutParams != null) {
+                                layoutParams.height = 0;
+                            }
                             XposedBridge.log("Early MediaView detection in addView");
                             view.setVisibility(View.GONE);
                         }
                     }
                 }
         );
+        return;
    }
 
-            XposedHelpers.findAndHookMethod(
-                    "androidx.fragment.app.Fragment",
-                    loadPackageParam.classLoader,
-                    "onViewCreated",
-                    View.class,
-                    android.os.Bundle.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-
-                            if (!(param.thisObject instanceof Fragment)) {
-                                XposedBridge.log("[FragmentHook] Not a Fragment: " + param.thisObject.getClass().getName());
-                                return;
-                            }
-
-                            Fragment fragment = (Fragment) param.thisObject;
-                            View view = (View) param.args[0];
-
-                            String className = fragment.getClass().getName();
-
-                            String resourceName = null;
-                            try {
-                                if (view != null && view.getId() != View.NO_ID) {
-                                    Resources res = view.getResources();
-                                    if (res != null) {
-                                        resourceName = res.getResourceName(view.getId());
-                                    }
-                                }
-                            } catch (Resources.NotFoundException e) {
-                                resourceName = "unknown_resource";
-                            }
-
-                            // Xposedログに出力
-                            XposedBridge.log("[FragmentHook] Class: " + className +
-                                    ", Resource: " + (resourceName != null ? resourceName : "no_resource"));
-                        }
-                    });
 
 
         XposedBridge.hookAllMethods(
@@ -376,7 +356,9 @@ public class Main implements IXposedHookLoadPackage {
                             ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
                             if (layoutParams != null) {
                                 layoutParams.height = 0;
+                                view.setVisibility(View.GONE);
                                 view.setLayoutParams(layoutParams);
+
                                 if (isLoggingEnabled()) {
                                     XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
 
@@ -387,7 +369,9 @@ public class Main implements IXposedHookLoadPackage {
                 }
         );
 
-            XposedHelpers.findAndHookMethod("android.view.View", loadPackageParam.classLoader, "onAttachedToWindow",
+        XposedBridge.hookAllMethods(
+                View.class,
+                "onAttachedToWindow",
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -452,29 +436,6 @@ public class Main implements IXposedHookLoadPackage {
                                     }
                                 }
                             }
-/*
-                            // リソース名に基づくチェック
-                            if (!excludeSet.contains(resourceName)) {
-                                shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
-                            }
-                            */
-//                            // ビューを非表示にする
-//                            if (shouldHide && view.getVisibility() != View.GONE) {
-//                                view.setVisibility(View.GONE);
-//                                return;
-//                            }
-                            /*
-                            if (resourceName != null) {
-                                boolean isExcludedResource = excludeSet.stream().anyMatch(resourceName::contains);
-                                boolean isExcludedResourceBySuffix = excludeSet.stream().anyMatch(resourceName::endsWith);
-
-                                if (!(isExcludedResource || isExcludedResourceBySuffix)) {
-                                    shouldHide = shouldHide ||
-                                            containsSet.stream().anyMatch(resourceName::contains) ||
-                                            exactMatchSet.contains(resourceName);
-                                }
-                            }
-                             */
 
                         }
                     }
