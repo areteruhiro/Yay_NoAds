@@ -16,6 +16,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -216,33 +217,33 @@ public class Main implements IXposedHookLoadPackage {
                                 resourceName = "UNKNOWN_RESOURCE";
                             }
                             ViewGroup.LayoutParams params = view.getLayoutParams();
-                            String sizeInfo = (params != null)
-                                    ? "width=" + params.width + ", height=" + params.height
-                                    : "NO_LAYOUT_PARAMS";
-                            String parentInfo = (view.getParent() instanceof ViewGroup)
-                                    ? "Parent: " + view.getParent().getClass().getSimpleName()
-                                    : "NO_PARENT_VIEW";
-                            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-                            StringBuilder stackTraceStr = new StringBuilder();
-                            for (int i = 3; i < stackTrace.length && i < 30; i++) {
-                                stackTraceStr.append("  at ").append(stackTrace[i].toString()).append("\n");
-                            }
-
-                            XposedBridge.log(
-                                    "[View Added]\n" +
-                                            "  Class: " + className + "\n" +
-                                            "  Hash: " + viewHash + "\n" +
-                                            "  ID: " + resourceName + " (" + viewId + ")\n" +
-                                            "  Text: \"" + viewText + "\"\n" +
-                                            "  Size: " + sizeInfo + "\n" +
-                                            "  " + parentInfo + "\n" +
-                                            "  StackTrace:\n" + stackTraceStr.toString() +
-                                            "----------------------------------------"
-                            );
+//                            String sizeInfo = (params != null)
+//                                    ? "width=" + params.width + ", height=" + params.height
+//                                    : "NO_LAYOUT_PARAMS";
+//                            String parentInfo = (view.getParent() instanceof ViewGroup)
+//                                    ? "Parent: " + view.getParent().getClass().getSimpleName()
+//                                    : "NO_PARENT_VIEW";
+//                            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+//                            StringBuilder stackTraceStr = new StringBuilder();
+//                            for (int i = 3; i < stackTrace.length && i < 30; i++) {
+//                                stackTraceStr.append("  at ").append(stackTrace[i].toString()).append("\n");
+//                            }
+//
+//                            XposedBridge.log(
+//                                    "[View Added]\n" +
+//                                            "  Class: " + className + "\n" +
+//                                            "  Hash: " + viewHash + "\n" +
+//                                            "  ID: " + resourceName + " (" + viewId + ")\n" +
+//                                            "  Text: \"" + viewText + "\"\n" +
+//                                            "  Size: " + sizeInfo + "\n" +
+//                                            "  " + parentInfo + "\n" +
+//                                            "  StackTrace:\n" + stackTraceStr.toString() +
+//                                            "----------------------------------------"
+//                            );
 
                             boolean shouldHide = false;
 
-                            if (className.equals("com.google.android.gms.ads.nativead.MediaView")) {
+                            if (className.equals("com.google.android.gms.ads.nativead.MediaView") ) {
                                 shouldHide = true;
                                 XposedBridge.log("Detected MediaView - hiding and removing: " + viewHash);
                             }
@@ -266,69 +267,83 @@ public class Main implements IXposedHookLoadPackage {
 
 
 
+
             XposedHelpers.findAndHookMethod(
-                    "com.google.ads.mediation.applovin.c",
+                    "com.google.android.gms.ads.nativead.NativeAdView",
                     loadPackageParam.classLoader,
-                    "loadAd",
+                    "setNativeAd",
+                    "com.google.android.gms.ads.nativead.NativeAd",
                     new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
-                            // 広告読み込みをブロック
                             param.setResult(null);
-                            XposedBridge.log("Blocked ad loading");
+                            XposedBridge.log("NativeAdView.setNativeAd blocked");
                         }
                     }
             );
-        XposedBridge.hookAllMethods(
-                ViewGroup.class,
-                "addView",
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        View view = (View) param.args[0];
-                        Context context = view.getContext();
-                        Resources res = context.getResources();
-                        String resourceName = "";
-                        boolean isAdView = false;
 
-                        // リソース名の取得（安全に）
-                        try {
-                            resourceName = res.getResourceName(view.getId());
-                        } catch (Resources.NotFoundException e) {
-                            resourceName = "unknown";
-                        }
-                        if (view != null && view.getClass().getName().equals("com.google.android.gms.ads.nativead.MediaView")
-                                ||view.getClass().getName().equals("com.google.android.gms.ads.nativead.NativeAdView")
-                                ||view.getClass().getName().equals("works.jubilee.timetree.ui.mainstreet.l")
-                                || resourceName.contains("event_ad")
-
-                        ) {
-                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-                            if (layoutParams != null) {
-                                layoutParams.height = 0;
+            XposedHelpers.findAndHookMethod(
+                    "works.jubilee.timetree.databinding.y2",
+                    loadPackageParam.classLoader,
+                    "inflate",
+                    LayoutInflater.class,
+                    ViewGroup.class,
+                    boolean.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            try {
+                                // 空のFrameLayoutで置き換え
+                                Context context = ((LayoutInflater)param.args[0]).getContext();
+                                FrameLayout emptyView = new FrameLayout(context);
+                                emptyView.setLayoutParams(new ViewGroup.LayoutParams(0, 0));
+                                param.setResult(emptyView);
+                                XposedBridge.log("y2 inflate completely blocked");
+                            } catch (Throwable t) {
+                                XposedBridge.log("y2 inflate hook error: " + t.getMessage());
                             }
-                            XposedBridge.log("Early MediaView detection in addView");
-                            view.setVisibility(View.GONE);
                         }
                     }
-                }
-        );
-        return;
-   }
+            );
 
 
+            XposedHelpers.findAndHookMethod(
+                    "works.jubilee.timetree.databinding.y2",
+                    loadPackageParam.classLoader,
+                    "bind",
+                    View.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            param.setResult(null);
+                            XposedBridge.log("y2 bind blocked");
+                        }
+                    }
+            );
 
-        XposedBridge.hookAllMethods(
-                View.class,
-                "onAttachedToWindow",
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        View view = (View) param.thisObject;
-                        Context context = view.getContext();
-                        String className = view.getClass().getName();
-                        String resourceName = getResourceName(view, context.getResources());
-                        boolean shouldHide = false;
+            XposedHelpers.findAndHookMethod(
+                    "com.facebook.shimmer.ShimmerFrameLayout",
+                    loadPackageParam.classLoader,
+                    "startShimmer",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            param.setResult(null);
+                            XposedBridge.log("Shimmer animation stopped");
+                        }
+                    }
+            );
+            XposedBridge.hookAllMethods(
+                    View.class,
+                    "onAttachedToWindow",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            View view = (View) param.thisObject;
+                            Context context = view.getContext();
+                            String className = view.getClass().getName();
+                            String resourceName = getResourceName(view, context.getResources());
+                            boolean shouldHide = false;
 
 //                        if (Arrays.asList(
 //                                "android.widget.TextView",
@@ -344,30 +359,78 @@ public class Main implements IXposedHookLoadPackage {
 //                            return;
 //                        }
 
-                        if (!excludeSet.contains(className)) {
-                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
-                        }
+                            if ( resourceName.contains("recommend_container")) {
 
-                        if (!excludeSet.contains(resourceName)) {
-                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
-                        }
+                                shouldHide = true;
+                            }
 
-                        if (shouldHide) {
-                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-                            if (layoutParams != null) {
-                                layoutParams.height = 0;
-                                view.setVisibility(View.GONE);
-                                view.setLayoutParams(layoutParams);
-
-                                if (isLoggingEnabled()) {
-                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
-
+                            if (shouldHide) {
+                                ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+                                if (layoutParams != null) {
+                                    layoutParams.height = 0;
+                                    view.setVisibility(View.GONE);
+                                    view.setLayoutParams(layoutParams);
                                 }
                             }
                         }
                     }
-                }
-        );
+            );
+
+        return;
+   }
+
+
+//
+//        XposedBridge.hookAllMethods(
+//                View.class,
+//                "onAttachedToWindow",
+//                new XC_MethodHook() {
+//                    @Override
+//                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+//                        View view = (View) param.thisObject;
+//                        Context context = view.getContext();
+//                        String className = view.getClass().getName();
+//                        String resourceName = getResourceName(view, context.getResources());
+//                        boolean shouldHide = false;
+//
+//                        if (Arrays.asList(
+//                                "android.widget.TextView",
+//                                "android.widget.ImageView",
+//                                "android.widget.Space",
+//                                "androidx.appcompat.widget.AppCompatTextView",
+//                                "androidx.appcompat.widget.AppCompatImageView",
+//                                "android.widget.FrameLayout",
+//                                "androidx.appcompat.view.menu.ActionMenuItemView",
+//                                "androidx.core.widget.ContentLoadingProgressBar",
+//                                "androidx.appcompat.widget.AppCompatButton"
+//                        ).contains(className)) {
+//                            return;
+//                        }
+//
+//                        if (!excludeSet.contains(className)) {
+//                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
+//                        }
+//
+//                        if (!excludeSet.contains(resourceName)) {
+//                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
+//                        }
+//
+//                        if (shouldHide) {
+//                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+//                            if (layoutParams != null) {
+//                                layoutParams.height = 0;
+//                                view.setVisibility(View.GONE);
+//                                view.setLayoutParams(layoutParams);
+//
+//                                if (isLoggingEnabled()) {
+//                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
+//
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//        );
 
         XposedBridge.hookAllMethods(
                 View.class,
@@ -425,6 +488,10 @@ public class Main implements IXposedHookLoadPackage {
                                 }
                             if (!excludeSet.contains(className)) {
                                 shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
+                            }
+
+                            if (!excludeSet.contains(resourceName)) {
+                                shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
                             }
                             if (shouldHide) {
                                 ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
