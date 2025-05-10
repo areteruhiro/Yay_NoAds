@@ -12,10 +12,17 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Environment;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.RecyclerView;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -62,7 +69,7 @@ public class Main implements IXposedHookLoadPackage {
             return;
         }
 
- //hookAllClassesInPackage(loadPackageParam.classLoader, loadPackageParam);
+  // hookAllClassesInPackage(loadPackageParam.classLoader, loadPackageParam);
 
         if ("works.jubilee.timetree".equals(packageName)) {
 
@@ -116,6 +123,166 @@ public class Main implements IXposedHookLoadPackage {
                     }
                 }
         );
+            XposedHelpers.findAndHookMethod(
+                    "works.jubilee.timetree.ui.calendarmonthly.I0",
+                    loadPackageParam.classLoader,
+                    "onCreateViewHolder",
+                    ViewGroup.class,
+                    int.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            try {
+                                Object result = param.getResult();
+                                if (result == null) return;
+
+                                // ViewHolderの型を安全にチェック
+                                Class<?> viewHolderClass = result.getClass();
+                                if (viewHolderClass.getName().startsWith("works.jubilee.timetree.ui.calendarmonthly.")) {
+                                    // ViewHolderからitemViewを取得
+                                    View itemView = (View) XposedHelpers.getObjectField(result, "itemView");
+
+                                    // 広告関連のViewHolderかどうかを判定
+                                    int viewType = (int) param.args[1];
+                                    boolean isAdView = viewType == 2; // コードからviewType=2が広告と推測
+
+                                    XposedBridge.log("[TimeTree Adapter] ViewHolder created - " +
+                                            "Type: " + viewType +
+                                            ", Class: " + viewHolderClass.getSimpleName() +
+                                            ", isAd: " + isAdView +
+                                            ", View: " + itemView.getClass().getName());
+
+                                    // 広告ViewHolderの場合の処理
+                                    if (isAdView) {
+                                        XposedBridge.log("Detected Ad ViewHolder - removing ad");
+                                        itemView.post(() -> {
+                                            ViewGroup.LayoutParams params = itemView.getLayoutParams();
+                                            if (params != null) {
+                                                params.width = 0;
+                                                params.height = 0;
+                                                itemView.setLayoutParams(params);
+                                            }
+                                            itemView.setVisibility(View.GONE);
+                                        });
+                                    }
+                                }
+                            } catch (Throwable t) {
+                                XposedBridge.log("Error in TimeTree Adapter hook: " + Log.getStackTraceString(t));
+                            }
+                        }
+                    }
+            );
+            XposedHelpers.findAndHookMethod(
+                    "works.jubilee.timetree.ui.calendarmonthly.I0",
+                    loadPackageParam.classLoader,
+                    "setAd",
+                    "works.jubilee.timetree.repository.ad.a", // 広告データの型
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            // 広告をnullに設定して無効化
+                            param.args[0] = null;
+                            XposedBridge.log("Blocked ad insertion in TimeTree calendar");
+                        }
+                    }
+            );
+
+        Class<?> constraintLayoutClass = XposedHelpers.findClass(
+                "androidx.constraintlayout.widget.ConstraintLayout",
+                loadPackageParam.classLoader
+        );
+            XposedHelpers.findAndHookMethod(
+                    constraintLayoutClass,
+                    "onViewAdded",
+                    View.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            View view = (View) param.args[0];
+                            if (view == null) return;
+                            String className = view.getClass().getName();
+                            int viewHash = System.identityHashCode(view);
+                            int viewId = view.getId();
+
+
+//                            String viewText = "";
+//                            if (view instanceof TextView) {
+//                                viewText = ((TextView) view).getText().toString();
+//                            }
+
+//                            String resourceName = "";
+//                            try {
+//                                resourceName = view.getResources().getResourceName(viewId);
+//                            } catch (Resources.NotFoundException ignored) {
+//                                resourceName = "UNKNOWN_RESOURCE";
+//                            }
+
+                            ViewGroup.LayoutParams params = view.getLayoutParams();
+//                            String sizeInfo = (params != null)
+//                                    ? "width=" + params.width + ", height=" + params.height
+//                                    : "NO_LAYOUT_PARAMS";
+
+//                            String parentInfo = (view.getParent() instanceof ViewGroup)
+//                                    ? "Parent: " + view.getParent().getClass().getSimpleName()
+//                                    : "NO_PARENT_VIEW";
+
+//                            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+//                            StringBuilder stackTraceStr = new StringBuilder();
+//                            for (int i = 3; i < stackTrace.length && i < 30; i++) {
+//                                stackTraceStr.append("  at ").append(stackTrace[i].toString()).append("\n");
+//                            }
+//
+//                            XposedBridge.log(
+//                                    "[View Added]\n" +
+//                                            "  Class: " + className + "\n" +
+//                                            "  Hash: " + viewHash + "\n" +
+//                                            "  ID: " + resourceName + " (" + viewId + ")\n" +
+//                                            "  Text: \"" + viewText + "\"\n" +
+//                                            "  Size: " + sizeInfo + "\n" +
+//                                            "  " + parentInfo + "\n" +
+//                                            "  StackTrace:\n" + stackTraceStr.toString() +
+//                                            "----------------------------------------"
+//                            );
+
+                            boolean shouldHide = false;
+
+                            if (className.equals("com.google.android.gms.ads.nativead.MediaView")) {
+                                shouldHide = true;
+                                XposedBridge.log("Detected MediaView - hiding and removing: " + viewHash);
+                            }
+
+                            if (shouldHide) {
+                                view.post(() -> {
+                                    view.setVisibility(View.GONE);
+                                    if (params != null) {
+                                        params.width = 0;
+                                        params.height = 0;
+                                        view.setLayoutParams(params);
+                                    }
+                                    if (view.getParent() != null) {
+                                        ((ViewGroup) view.getParent()).removeView(view);
+                                    }
+                                });
+                            }
+                        }
+                    }
+            );
+
+
+
+            XposedHelpers.findAndHookMethod(
+                    "com.google.ads.mediation.applovin.c",
+                    loadPackageParam.classLoader,
+                    "loadAd",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            // 広告読み込みをブロック
+                            param.setResult(null);
+                            XposedBridge.log("Blocked ad loading");
+                        }
+                    }
+            );
         XposedBridge.hookAllMethods(
                 ViewGroup.class,
                 "addView",
@@ -123,15 +290,53 @@ public class Main implements IXposedHookLoadPackage {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
                         View view = (View) param.args[0];
-                        if (view != null && view.getClass().getName().equals("com.google.android.gms.ads.nativead.MediaView")) {
+                        if (view != null && view.getClass().getName().equals("com.google.android.gms.ads.nativead.MediaView")||view.getClass().getName().equals("com.google.android.gms.ads.nativead.NativeAdView")||view.getClass().getName().equals("works.jubilee.timetree.ui.mainstreet.l")) {
                             XposedBridge.log("Early MediaView detection in addView");
                             view.setVisibility(View.GONE);
                         }
                     }
                 }
         );
-return;
    }
+
+            XposedHelpers.findAndHookMethod(
+                    "androidx.fragment.app.Fragment",
+                    loadPackageParam.classLoader,
+                    "onViewCreated",
+                    View.class,
+                    android.os.Bundle.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+
+                            if (!(param.thisObject instanceof Fragment)) {
+                                XposedBridge.log("[FragmentHook] Not a Fragment: " + param.thisObject.getClass().getName());
+                                return;
+                            }
+
+                            Fragment fragment = (Fragment) param.thisObject;
+                            View view = (View) param.args[0];
+
+                            String className = fragment.getClass().getName();
+
+                            String resourceName = null;
+                            try {
+                                if (view != null && view.getId() != View.NO_ID) {
+                                    Resources res = view.getResources();
+                                    if (res != null) {
+                                        resourceName = res.getResourceName(view.getId());
+                                    }
+                                }
+                            } catch (Resources.NotFoundException e) {
+                                resourceName = "unknown_resource";
+                            }
+
+                            // Xposedログに出力
+                            XposedBridge.log("[FragmentHook] Class: " + className +
+                                    ", Resource: " + (resourceName != null ? resourceName : "no_resource"));
+                        }
+                    });
+
 
         XposedBridge.hookAllMethods(
                 View.class,
@@ -281,11 +486,16 @@ return;
     private void writeDefaultConfig(File configFile, String packageName) {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8))) {
             String defaultConfig;
+            if (packageName.equals("works.jubilee.timetree")) {
 
+                defaultConfig = "C:event_ad";
+            }else
             if (packageName.equals("jp.co.airfront.android.a2chMate")) {
 
                 defaultConfig = "C:Ads,C;ads,C:ADs,C:AdView,E:o.onAdsExhausted";
+
             } else {
+
                 defaultConfig = "C:Ads,C;ads,C:ADs,";
             }
 
@@ -427,9 +637,9 @@ return;
 
 // メソッドに応じたログ出力
                         if ("invokeSuspend".equals(method.getName())) {
-                       //     XposedBridge.log("Before calling invokeSuspend in class: " + clazz.getName() + " with args: " + argsString);
+                     XposedBridge.log("Before calling invokeSuspend in class: " + clazz.getName() + " with args: " + argsString);
                         } else if ("run".equals(method.getName())) {
-                            XposedBridge.log("Before calling run in class: " + clazz.getName() + " with args: " + argsString);
+                           // XposedBridge.log("Before calling run in class: " + clazz.getName() + " with args: " + argsString);
                         } else if ("onCreate".equals(method.getName())) {
                             XposedBridge.log("Before calling onCreate in class: " + clazz.getName() + " with args: " + argsString);
                         } else if ("setAlpha".equals(method.getName())) {
