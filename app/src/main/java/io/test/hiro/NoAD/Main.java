@@ -145,13 +145,13 @@ public class Main implements IXposedHookLoadPackage {
 
                                     // 広告関連のViewHolderかどうかを判定
                                     int viewType = (int) param.args[1];
-                                    boolean isAdView = viewType == 2; // コードからviewType=2が広告と推測
+                                    boolean isAdView = viewType == 2;
 
-                                    XposedBridge.log("[TimeTree Adapter] ViewHolder created - " +
-                                            "Type: " + viewType +
-                                            ", Class: " + viewHolderClass.getSimpleName() +
-                                            ", isAd: " + isAdView +
-                                            ", View: " + itemView.getClass().getName());
+//                                    XposedBridge.log("[TimeTree Adapter] ViewHolder created - " +
+//                                            "Type: " + viewType +
+//                                            ", Class: " + viewHolderClass.getSimpleName() +
+//                                            ", isAd: " + isAdView +
+//                                            ", View: " + itemView.getClass().getName());
 
                                     // 広告ViewHolderの場合の処理
                                     if (isAdView) {
@@ -217,18 +217,18 @@ public class Main implements IXposedHookLoadPackage {
                                 resourceName = "UNKNOWN_RESOURCE";
                             }
                             ViewGroup.LayoutParams params = view.getLayoutParams();
-//                            String sizeInfo = (params != null)
-//                                    ? "width=" + params.width + ", height=" + params.height
-//                                    : "NO_LAYOUT_PARAMS";
-//                            String parentInfo = (view.getParent() instanceof ViewGroup)
-//                                    ? "Parent: " + view.getParent().getClass().getSimpleName()
-//                                    : "NO_PARENT_VIEW";
-//                            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-//                            StringBuilder stackTraceStr = new StringBuilder();
-//                            for (int i = 3; i < stackTrace.length && i < 30; i++) {
-//                                stackTraceStr.append("  at ").append(stackTrace[i].toString()).append("\n");
-//                            }
-//
+                            String sizeInfo = (params != null)
+                                    ? "width=" + params.width + ", height=" + params.height
+                                    : "NO_LAYOUT_PARAMS";
+                            String parentInfo = (view.getParent() instanceof ViewGroup)
+                                    ? "Parent: " + view.getParent().getClass().getSimpleName()
+                                    : "NO_PARENT_VIEW";
+                            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+                            StringBuilder stackTraceStr = new StringBuilder();
+                            for (int i = 3; i < stackTrace.length && i < 30; i++) {
+                                stackTraceStr.append("  at ").append(stackTrace[i].toString()).append("\n");
+                            }
+
 //                            XposedBridge.log(
 //                                    "[View Added]\n" +
 //                                            "  Class: " + className + "\n" +
@@ -359,7 +359,7 @@ public class Main implements IXposedHookLoadPackage {
 //                            return;
 //                        }
 
-                            if ( resourceName.contains("recommend_container")) {
+                            if ( resourceName.contains("recommend_container")|| resourceName.contains("event_ad")) {
 
                                 shouldHide = true;
                             }
