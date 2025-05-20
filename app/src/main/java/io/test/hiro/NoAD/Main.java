@@ -421,7 +421,6 @@ public class Main implements IXposedHookLoadPackage {
                                     "ad_view",
                                     "ad_layout",
                                     "search_result_list_bottom_ad",
-                                    "header",
                                     "rail_ad",
                                     "ydn_ad_new_line",
                                     "ad_framead_frame",
