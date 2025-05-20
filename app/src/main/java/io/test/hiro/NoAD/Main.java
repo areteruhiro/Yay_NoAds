@@ -1,5 +1,6 @@
 package io.test.hiro.NoAD;
 
+import android.app.Notification;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -10,6 +11,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -41,6 +43,7 @@ import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 
@@ -74,8 +77,8 @@ public class Main implements IXposedHookLoadPackage {
         }
 
      // hookAllClassesInPackage(loadPackageParam.classLoader, loadPackageParam);
-
         if ("works.jubilee.timetree".equals(packageName)) {
+
 
 
             Class<?> stateClass = XposedHelpers.findClass(
@@ -380,6 +383,8 @@ public class Main implements IXposedHookLoadPackage {
             return;
         }
         if ("jp.co.yahoo.android.apps.transit".equals(packageName)) {
+
+
             XposedBridge.hookAllMethods(
                     View.class,
                     "onAttachedToWindow",
@@ -390,20 +395,6 @@ public class Main implements IXposedHookLoadPackage {
                             Context context = view.getContext();
                             String className = view.getClass().getName();
                             String resourceName = getResourceName(view, context.getResources());
-                            // 除外クラスのチェック
-                            if (Arrays.asList(
-                                    "android.widget.TextView",
-                                    "android.widget.ImageView",
-                                    "android.widget.Space",
-                                    "androidx.appcompat.widget.AppCompatTextView",
-                                    "androidx.appcompat.widget.AppCompatImageView",
-                                    "android.widget.FrameLayout",
-                                    "androidx.appcompat.view.menu.ActionMenuItemView",
-                                    "androidx.core.widget.ContentLoadingProgressBar",
-                                    "androidx.appcompat.widget.AppCompatButton"
-                            ).contains(className)) {
-                                return;
-                            }
 
                             // 特定の広告ビューのみを対象にする
                             String[] targetClasses = {
@@ -415,7 +406,8 @@ public class Main implements IXposedHookLoadPackage {
                                     "jp.co.yahoo.android.apps.transit.ad.SearchResultListBottomAdView",
                                     "jp.co.yahoo.android.apps.transit.ui.view.navi.list.PreNextHeaderView",
                                     "jp.co.yahoo.android.apps.transit.ad.RailAdView",
-                                    "androidx.constraintlayout.widget.ConstraintLayout"
+                               "androidx.constraintlayout.widget.ConstraintLayout",
+                                    "jp.co.yahoo.android.apps.transit.ad.StationAdTopView"
                             };
 
                             String[] targetResources = {
@@ -433,7 +425,8 @@ public class Main implements IXposedHookLoadPackage {
                                     "rail_ad",
                                     "ydn_ad_new_line",
                                     "ad_framead_frame",
-                                    "ad_container"
+                                    "ad_container",
+                                    "station_ad_top"
                             };
 
                             boolean shouldHide = false;
@@ -472,6 +465,7 @@ public class Main implements IXposedHookLoadPackage {
             );
 return;
       }
+
         XposedBridge.hookAllMethods(
                 View.class,
                 "onAttachedToWindow",
