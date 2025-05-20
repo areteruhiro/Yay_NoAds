@@ -15,8 +15,10 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -38,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
@@ -70,7 +73,7 @@ public class Main implements IXposedHookLoadPackage {
             return;
         }
 
-  // hookAllClassesInPackage(loadPackageParam.classLoader, loadPackageParam);
+     // hookAllClassesInPackage(loadPackageParam.classLoader, loadPackageParam);
 
         if ("works.jubilee.timetree".equals(packageName)) {
 
@@ -86,44 +89,44 @@ public class Main implements IXposedHookLoadPackage {
 
 
             XposedHelpers.findAndHookMethod(stateClass,
-                "getDisplayHeightInDp",
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        param.setResult(0f);
+                    "getDisplayHeightInDp",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            param.setResult(0f);
+                        }
                     }
-                }
-        );
+            );
 
-        Class<?> viewStateEnum = XposedHelpers.findClass(
-                "works.jubilee.timetree.components.headline.composable.c$a",
-                loadPackageParam.classLoader
-        );
-        Object hideEnum = XposedHelpers.getStaticObjectField(
-                viewStateEnum,
-                "Hide"
-        );
+            Class<?> viewStateEnum = XposedHelpers.findClass(
+                    "works.jubilee.timetree.components.headline.composable.c$a",
+                    loadPackageParam.classLoader
+            );
+            Object hideEnum = XposedHelpers.getStaticObjectField(
+                    viewStateEnum,
+                    "Hide"
+            );
 
-        XposedHelpers.findAndHookMethod(stateClass,
-                "getViewState",
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        param.setResult(hideEnum);
+            XposedHelpers.findAndHookMethod(stateClass,
+                    "getViewState",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            param.setResult(hideEnum);
+                        }
                     }
-                }
-        );
+            );
 
 
-        XposedHelpers.findAndHookMethod(stateClasss,
-                "getViewState",
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        param.setResult(hideEnum);
+            XposedHelpers.findAndHookMethod(stateClasss,
+                    "getViewState",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            param.setResult(hideEnum);
+                        }
                     }
-                }
-        );
+            );
             XposedHelpers.findAndHookMethod(
                     "works.jubilee.timetree.ui.calendarmonthly.I0",
                     loadPackageParam.classLoader,
@@ -188,10 +191,10 @@ public class Main implements IXposedHookLoadPackage {
                     }
             );
 
-        Class<?> constraintLayoutClass = XposedHelpers.findClass(
-                "androidx.constraintlayout.widget.ConstraintLayout",
-                loadPackageParam.classLoader
-        );
+            Class<?> constraintLayoutClass = XposedHelpers.findClass(
+                    "androidx.constraintlayout.widget.ConstraintLayout",
+                    loadPackageParam.classLoader
+            );
             XposedHelpers.findAndHookMethod(
                     constraintLayoutClass,
                     "onViewAdded",
@@ -243,7 +246,7 @@ public class Main implements IXposedHookLoadPackage {
 
                             boolean shouldHide = false;
 
-                            if (className.equals("com.google.android.gms.ads.nativead.MediaView") ) {
+                            if (className.equals("com.google.android.gms.ads.nativead.MediaView")) {
                                 shouldHide = true;
                                 XposedBridge.log("Detected MediaView - hiding and removing: " + viewHash);
                             }
@@ -264,8 +267,6 @@ public class Main implements IXposedHookLoadPackage {
                         }
                     }
             );
-
-
 
 
             XposedHelpers.findAndHookMethod(
@@ -294,7 +295,7 @@ public class Main implements IXposedHookLoadPackage {
                         protected void afterHookedMethod(MethodHookParam param) {
                             try {
                                 // 空のFrameLayoutで置き換え
-                                Context context = ((LayoutInflater)param.args[0]).getContext();
+                                Context context = ((LayoutInflater) param.args[0]).getContext();
                                 FrameLayout emptyView = new FrameLayout(context);
                                 emptyView.setLayoutParams(new ViewGroup.LayoutParams(0, 0));
                                 param.setResult(emptyView);
@@ -359,7 +360,7 @@ public class Main implements IXposedHookLoadPackage {
 //                            return;
 //                        }
 
-                            if ( resourceName.contains("recommend_container")|| resourceName.contains("event_ad")) {
+                            if (resourceName.contains("recommend_container") || resourceName.contains("event_ad")) {
 
                                 shouldHide = true;
                             }
@@ -376,62 +377,101 @@ public class Main implements IXposedHookLoadPackage {
                     }
             );
 
-        return;
-   }
+            return;
+        }
+        if ("jp.co.yahoo.android.apps.transit".equals(packageName)) {
+            XposedBridge.hookAllMethods(
+                    View.class,
+                    "onAttachedToWindow",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            View view = (View) param.thisObject;
+                            Context context = view.getContext();
+                            String className = view.getClass().getName();
+                            String resourceName = getResourceName(view, context.getResources());
+                            // 除外クラスのチェック
+                            if (Arrays.asList(
+                                    "android.widget.TextView",
+                                    "android.widget.ImageView",
+                                    "android.widget.Space",
+                                    "androidx.appcompat.widget.AppCompatTextView",
+                                    "androidx.appcompat.widget.AppCompatImageView",
+                                    "android.widget.FrameLayout",
+                                    "androidx.appcompat.view.menu.ActionMenuItemView",
+                                    "androidx.core.widget.ContentLoadingProgressBar",
+                                    "androidx.appcompat.widget.AppCompatButton"
+                            ).contains(className)) {
+                                return;
+                            }
 
+                            // 特定の広告ビューのみを対象にする
+                            String[] targetClasses = {
+                                    "jp.co.yahoo.android.apps.transit.ad.NaviSearchTopAdView",
+                                    "jp.co.yahoo.android.apps.transit.ad.YdnAdView",
+                                    "jp.co.yahoo.android.apps.transit.ad.NaviSearchBottomAdView",
+                                    "jp.co.yahoo.android.apps.transit.ad.MyPageAdView",
+                                    "jp.co.yahoo.android.apps.transit.ad.YdnAdVie",
+                                    "jp.co.yahoo.android.apps.transit.ad.SearchResultListBottomAdView",
+                                    "jp.co.yahoo.android.apps.transit.ui.view.navi.list.PreNextHeaderView",
+                                    "jp.co.yahoo.android.apps.transit.ad.RailAdView",
+                                    "androidx.constraintlayout.widget.ConstraintLayout"
+                            };
 
-//
-//        XposedBridge.hookAllMethods(
-//                View.class,
-//                "onAttachedToWindow",
-//                new XC_MethodHook() {
-//                    @Override
-//                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-//                        View view = (View) param.thisObject;
-//                        Context context = view.getContext();
-//                        String className = view.getClass().getName();
-//                        String resourceName = getResourceName(view, context.getResources());
-//                        boolean shouldHide = false;
-//
-//                        if (Arrays.asList(
-//                                "android.widget.TextView",
-//                                "android.widget.ImageView",
-//                                "android.widget.Space",
-//                                "androidx.appcompat.widget.AppCompatTextView",
-//                                "androidx.appcompat.widget.AppCompatImageView",
-//                                "android.widget.FrameLayout",
-//                                "androidx.appcompat.view.menu.ActionMenuItemView",
-//                                "androidx.core.widget.ContentLoadingProgressBar",
-//                                "androidx.appcompat.widget.AppCompatButton"
-//                        ).contains(className)) {
-//                            return;
-//                        }
-//
-//                        if (!excludeSet.contains(className)) {
-//                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
-//                        }
-//
-//                        if (!excludeSet.contains(resourceName)) {
-//                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
-//                        }
-//
-//                        if (shouldHide) {
-//                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-//                            if (layoutParams != null) {
-//                                layoutParams.height = 0;
-//                                view.setVisibility(View.GONE);
-//                                view.setLayoutParams(layoutParams);
-//
-//                                if (isLoggingEnabled()) {
-//                                    XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
-//
-//                                }
-//                            }
-//                        }
-//                    }
-//                }
-//        );
+                            String[] targetResources = {
+                                    "top_ad_view",
+                                    "loading_view",
+                                    "ydn_ad",
+                                    "ydn_ad_new_line",
+                                    "yda_text_ad_layout",
+                                    "bottom_ad_view",
+                                    "ad_video",
+                                    "ad_view",
+                                    "ad_layout",
+                                    "search_result_list_bottom_ad",
+                                    "header",
+                                    "rail_ad",
+                                    "ydn_ad_new_line",
+                                    "ad_framead_frame",
+                                    "ad_container"
+                            };
 
+                            boolean shouldHide = false;
+
+                            // クラス名でチェック
+                            for (String targetClass : targetClasses) {
+                                if (className.equals(targetClass)) {
+                                    shouldHide = true;
+                                    break;
+                                }
+                            }
+
+                            // リソース名でチェック
+                            if (!shouldHide && resourceName != null) {
+                                for (String targetResource : targetResources) {
+                                    if (resourceName.equals(targetResource)) {
+                                        shouldHide = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // 広告ビューを非表示にする
+                            if (shouldHide) {
+                                ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+                                if (layoutParams != null) {
+                                    layoutParams.height = 0;
+                                    view.setLayoutParams(layoutParams);
+                                    if (isLoggingEnabled()) {
+                                        XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
+                                    }
+                                }
+                            }
+                        }
+                    }
+            );
+return;
+      }
         XposedBridge.hookAllMethods(
                 View.class,
                 "onAttachedToWindow",
@@ -475,10 +515,10 @@ public class Main implements IXposedHookLoadPackage {
                                     contains(className)) {
                                 return;
                             }
-                            if (isLoggingEnabled()) {
-                                XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
-                                XposedBridge.log("Current containsSet: " + containsSet);
-                            }
+
+//                                XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
+//                                XposedBridge.log("Current containsSet: " + containsSet);
+
                                 boolean isExcluded = excludeSet.stream().anyMatch(className::contains);
                                 boolean isExcludedBySuffix = excludeSet.stream().anyMatch(className::endsWith);
                                 if (isExcluded || isExcludedBySuffix) {
@@ -498,9 +538,8 @@ public class Main implements IXposedHookLoadPackage {
                                 if (layoutParams != null) {
                                     layoutParams.height = 0;
                                     view.setLayoutParams(layoutParams);
-                                    if (isLoggingEnabled()) {
+
                                         XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
-                                    }
                                 }
                             }
 
@@ -508,8 +547,75 @@ public class Main implements IXposedHookLoadPackage {
                     }
             );
     }
+    private void hideAdView(View view) {
+        final String viewClass = view.getClass().getName();
+        final int viewHash = System.identityHashCode(view);
 
+        try {
+            // ログ: 処理開始
+            XposedBridge.log("[AdBlocker] Attempting to hide ad view: " +
+                    viewClass + " (hash: " + viewHash + ")");
 
+            // 1. レイアウトパラメータ変更
+            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+            if (layoutParams != null) {
+                XposedBridge.log("[AdBlocker] Original layout params - height: " +
+                        layoutParams.height + ", width: " + layoutParams.width);
+
+                layoutParams.height = 0;
+                layoutParams.width = 0;
+                view.setLayoutParams(layoutParams);
+
+                XposedBridge.log("[AdBlocker] Modified layout params - height: " +
+                        layoutParams.height + ", width: " + layoutParams.width);
+            } else {
+                XposedBridge.log("[AdBlocker] No layout params found for view");
+            }
+
+            // 2. 可視性変更
+            XposedBridge.log("[AdBlocker] Original visibility: " + view.getVisibility());
+            view.setVisibility(View.GONE);
+            XposedBridge.log("[AdBlocker] New visibility: " + view.getVisibility());
+
+            // 3. 親Viewから削除
+            ViewParent parent = view.getParent();
+            if (parent instanceof ViewGroup) {
+                ViewGroup parentGroup = (ViewGroup) parent;
+                XposedBridge.log("[AdBlocker] Parent view: " + parent.getClass().getName() +
+                        " (child count before: " + parentGroup.getChildCount() + ")");
+
+                parentGroup.removeView(view);
+
+                XposedBridge.log("[AdBlocker] Child count after removal: " +
+                        parentGroup.getChildCount());
+            } else {
+                XposedBridge.log("[AdBlocker] No parent view found or not a ViewGroup");
+            }
+
+            // 4. リソースクリア
+            if (view.getBackground() != null) {
+                XposedBridge.log("[AdBlocker] Clearing background drawable");
+                view.setBackground(null);
+            }
+
+            if (view instanceof ImageView) {
+                ImageView imageView = (ImageView) view;
+                if (imageView.getDrawable() != null) {
+                    XposedBridge.log("[AdBlocker] Clearing image drawable");
+                    imageView.setImageDrawable(null);
+                }
+            }
+
+            // 成功ログ
+            XposedBridge.log("[AdBlocker] Successfully hid ad view: " + viewClass +
+                    " (hash: " + viewHash + ")");
+
+        } catch (Exception e) {
+            // エラーログ
+            XposedBridge.log("[AdBlocker] ERROR hiding view " + viewClass +
+                    " (hash: " + viewHash + "): " + Log.getStackTraceString(e));
+        }
+    }
 
     private void writeDefaultConfig(File configFile, String packageName) {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8))) {
