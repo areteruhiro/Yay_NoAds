@@ -405,7 +405,6 @@ public class Main implements IXposedHookLoadPackage {
                                     "jp.co.yahoo.android.apps.transit.ad.YdnAdVie",
                                     "jp.co.yahoo.android.apps.transit.ad.SearchResultListBottomAdView",
                                     "jp.co.yahoo.android.apps.transit.ad.RailAdView",
-                                   "androidx.constraintlayout.widget.ConstraintLayout",
                                     "jp.co.yahoo.android.apps.transit.ad.StationAdTopView"
                             };
 
@@ -437,7 +436,11 @@ public class Main implements IXposedHookLoadPackage {
                                 }
                             }
 
-                            // リソース名でチェック
+                            if (!shouldHide && className.equals("androidx.constraintlayout.widget.ConstraintLayout")) {
+                                if (resourceName != null && resourceName.equals("ad_container")||resourceName.equals("ydn_ad_new_line")||resourceName.equals("ad_frame")) {
+                                    shouldHide = true;
+                                }
+                            }
                             if (!shouldHide && resourceName != null) {
                                 for (String targetResource : targetResources) {
                                     if (resourceName.equals(targetResource)) {
@@ -446,16 +449,12 @@ public class Main implements IXposedHookLoadPackage {
                                     }
                                 }
                             }
-
-                            // 広告ビューを非表示にする
                             if (shouldHide) {
                                 ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
                                 if (layoutParams != null) {
                                     layoutParams.height = 0;
                                     view.setLayoutParams(layoutParams);
-                                    if (isLoggingEnabled()) {
-                                        XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
-                                    }
+
                                 }
                             }
                         }
