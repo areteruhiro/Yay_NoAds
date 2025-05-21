@@ -404,9 +404,8 @@ public class Main implements IXposedHookLoadPackage {
                                     "jp.co.yahoo.android.apps.transit.ad.MyPageAdView",
                                     "jp.co.yahoo.android.apps.transit.ad.YdnAdVie",
                                     "jp.co.yahoo.android.apps.transit.ad.SearchResultListBottomAdView",
-                                    "jp.co.yahoo.android.apps.transit.ui.view.navi.list.PreNextHeaderView",
                                     "jp.co.yahoo.android.apps.transit.ad.RailAdView",
-                               "androidx.constraintlayout.widget.ConstraintLayout",
+                                   "androidx.constraintlayout.widget.ConstraintLayout",
                                     "jp.co.yahoo.android.apps.transit.ad.StationAdTopView"
                             };
 
