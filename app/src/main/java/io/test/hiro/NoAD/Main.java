@@ -1,5 +1,7 @@
 package io.test.hiro.NoAD;
 
+import static com.google.android.material.internal.ViewUtils.dpToPx;
+
 import android.app.Notification;
 import android.content.Context;
 import android.content.res.Resources;
@@ -11,17 +13,25 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.method.LinkMovementMethod;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -76,9 +86,8 @@ public class Main implements IXposedHookLoadPackage {
             return;
         }
 
-     // hookAllClassesInPackage(loadPackageParam.classLoader, loadPackageParam);
+        // hookAllClassesInPackage(loadPackageParam.classLoader, loadPackageParam);
         if ("works.jubilee.timetree".equals(packageName)) {
-
 
 
             Class<?> stateClass = XposedHelpers.findClass(
@@ -187,7 +196,6 @@ public class Main implements IXposedHookLoadPackage {
                     new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
-                            // 広告をnullに設定して無効化
                             param.args[0] = null;
                             XposedBridge.log("Blocked ad insertion in TimeTree calendar");
                         }
@@ -395,8 +403,6 @@ public class Main implements IXposedHookLoadPackage {
                             Context context = view.getContext();
                             String className = view.getClass().getName();
                             String resourceName = getResourceName(view, context.getResources());
-
-                            // 特定の広告ビューのみを対象にする
                             String[] targetClasses = {
                                     "jp.co.yahoo.android.apps.transit.ad.NaviSearchTopAdView",
                                     "jp.co.yahoo.android.apps.transit.ad.YdnAdView",
@@ -437,7 +443,7 @@ public class Main implements IXposedHookLoadPackage {
                             }
 
                             if (!shouldHide && className.equals("androidx.constraintlayout.widget.ConstraintLayout")) {
-                                if (resourceName != null && resourceName.equals("ad_container")||resourceName.equals("ydn_ad_new_line")||resourceName.equals("ad_frame")) {
+                                if (resourceName != null && resourceName.equals("ad_container") || resourceName.equals("ydn_ad_new_line") || resourceName.equals("ad_frame")) {
                                     shouldHide = true;
                                 }
                             }
@@ -460,151 +466,216 @@ public class Main implements IXposedHookLoadPackage {
                         }
                     }
             );
-return;
-      }
+            return;
+        }
 
         XposedBridge.hookAllMethods(
                 View.class,
                 "onAttachedToWindow",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 
-                            View view = (View) param.thisObject;
-                            Context context = view.getContext();
-                            String className = view.getClass().getName();
-                            String resourceName = getResourceName(view, context.getResources());
-                            if (isLoggingEnabled()) {
-                                checkAndChangeBackgroundColor(context, view, loadPackageParam.packageName);
-                                return;
-                            }
+                        View view = (View) param.thisObject;
+                        Context context = view.getContext();
+                        String className = view.getClass().getName();
+                        String resourceName = getResourceName(view, context.getResources());
 
-                            boolean shouldHide = false;
-                            if (!hasToastShown) {
-                                try {
-                                    loadAdClassesFromPreferences(context, packageName);
-                                    hasToastShown = true;
-                                    if (isLoggingEnabled()) {
-                                        XposedBridge.log("Ad detection popup displayed");
-                                    }
-                                } catch (Exception e) {
-                                    if (isLoggingEnabled()) {
-                                        Toast.makeText(context, "Ad detection activated", Toast.LENGTH_SHORT).show();
-                                    }
+
+                        boolean shouldHide = false;
+                        if (!hasToastShown) {
+                            try {
+                                loadAdClassesFromPreferences(context, packageName);
+                                hasToastShown = true;
+
+                            } catch (Exception e) {
+                                if (isLoggingEnabled()) {
+                                    Toast.makeText(context, "Ad detection activated", Toast.LENGTH_SHORT).show();
                                 }
                             }
-                            if (Arrays.asList(
-                                    "android.widget.TextView",
-                                    "android.widget.ImageView",
-                                    "android.widget.Space",
-                                    "androidx.appcompat.widget.AppCompatTextView",
-                                    "androidx.appcompat.widget.AppCompatImageView",
-                                    "android.widget.FrameLayout",
-                                    "androidx.appcompat.view.menu.ActionMenuItemView",
-                                    "androidx.core.widget.ContentLoadingProgressBar",
-                                    "androidx.appcompat.widget.AppCompatButton").
-                                    contains(className)) {
-                                return;
-                            }
+                        }
+                        if (Arrays.asList(
+                                        "android.widget.TextView",
+                                        "android.widget.ImageView",
+                                        "android.widget.Space",
+                                        "androidx.appcompat.widget.AppCompatTextView",
+                                        "androidx.appcompat.widget.AppCompatImageView",
+                                        "android.widget.FrameLayout",
+                                        "androidx.appcompat.view.menu.ActionMenuItemView",
+                                        "androidx.core.widget.ContentLoadingProgressBar",
+                                        "androidx.appcompat.widget.AppCompatButton").
+                                contains(className)) {
+                            return;
+                        }
 
 //                                XposedBridge.log("Checking view: Class Name = " + className + ", Resource Name = " + resourceName);
 //                                XposedBridge.log("Current containsSet: " + containsSet);
 
-                                boolean isExcluded = excludeSet.stream().anyMatch(className::contains);
-                                boolean isExcludedBySuffix = excludeSet.stream().anyMatch(className::endsWith);
-                                if (isExcluded || isExcludedBySuffix) {
-                                } else {
-                                    shouldHide = containsSet.stream().anyMatch(className::contains) ||
-                                            exactMatchSet.contains(className);
-                                }
-                            if (!excludeSet.contains(className)) {
-                                shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
-                            }
+                        boolean isExcluded = excludeSet.stream().anyMatch(className::contains);
+                        boolean isExcludedBySuffix = excludeSet.stream().anyMatch(className::endsWith);
+                        if (isExcluded || isExcludedBySuffix) {
+                        } else {
+                            shouldHide = containsSet.stream().anyMatch(className::contains) ||
+                                    exactMatchSet.contains(className);
+                        }
+                        if (!excludeSet.contains(className)) {
+                            shouldHide = containsSet.stream().anyMatch(className::contains) || exactMatchSet.contains(className);
+                        }
 
-                            if (!excludeSet.contains(resourceName)) {
-                                shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
-                            }
-                            if (shouldHide) {
-                                ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-                                if (layoutParams != null) {
-                                    layoutParams.height = 0;
-                                    view.setLayoutParams(layoutParams);
+                        if (!excludeSet.contains(resourceName)) {
+                            shouldHide = shouldHide || containsSet.stream().anyMatch(resourceName::contains) || exactMatchSet.contains(resourceName);
+                        }
+                        if (shouldHide) {
+                            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+                            if (layoutParams != null) {
+                                layoutParams.height = 0;
+                                view.setLayoutParams(layoutParams);
 
-                                        XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
-                                }
+                                XposedBridge.log("Ad view hidden on attach: " + className + " (Resource: " + resourceName + ")");
                             }
+                        }
+
+                    }
+                }
+        );
+
+        if (isLoggingEnabled()) {
+            XposedHelpers.findAndHookMethod(
+                    ViewGroup.class,
+                    "addView",
+                    View.class,
+                    ViewGroup.LayoutParams.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            ViewGroup parent = (ViewGroup) param.thisObject;
+                            View targetView = (View) param.args[0];
+                            if (targetView == null) return;
+
+                            Context context = targetView.getContext();
+                            int viewId = targetView.getId();
+                            String className = targetView.getClass().getName();
+                            String resourceName = getResourceName(context, viewId);
+                            if (resourceName != null && resourceName.endsWith(":id/action_bar_root"))
+                                return;
+
+                            targetView.post(() -> {
+
+                                DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+                                int screenWidth = metrics.widthPixels;
+                                int screenHeight = metrics.heightPixels;
+
+                                int[] location = new int[2];
+                                targetView.getLocationOnScreen(location);
+
+                                int viewWidth = targetView.getWidth();
+                                int viewHeight = targetView.getHeight();
+
+
+                                if ((resourceName == null || "N/A".equals(resourceName))
+                                        && viewWidth > screenWidth * 0.9
+                                        && viewHeight > screenHeight * 0.9) {
+                                    XposedBridge.log("⏭️ Skipped full-screen anonymous view (post-layout): " + className);
+                                    return;
+                                }
+
+                                try {
+                                    if ("overlay_added".equals(targetView.getTag())) return;
+                                    targetView.setTag("overlay_added");
+
+                                    Context ctx = targetView.getContext();
+                                    String infoText = "Class: " + className + "\n" +
+                                            "Resource: " + (resourceName != null ? resourceName : "N/A");
+
+                                    TextView overlay = new TextView(ctx);
+                                    overlay.setText("INFO");
+                                    overlay.setTextSize(8f);
+                                    overlay.setBackgroundColor(0xAAFF0000);
+                                    overlay.setTextColor(Color.WHITE);
+                                    overlay.setPadding(4, 2, 4, 2);
+                                    overlay.setAlpha(0.6f);
+                                    overlay.setClickable(true);
+
+                                    overlay.setTag(0);
+
+                                    overlay.setOnClickListener(v -> {
+                                        Object tag = v.getTag();
+                                        int count = (tag instanceof Integer) ? (Integer) tag : 0;
+                                        count++;
+
+                                        if (count >= 2) {
+                                            v.setVisibility(View.GONE);
+                                        } else {
+                                            v.setTag(count);
+                                            XposedBridge.log("🔍 Overlay Clicked:\n" + infoText);
+                                            showCopyablePopup(ctx, targetView, infoText);
+                                        }
+                                    });
+
+                                    if (targetView instanceof FrameLayout) {
+                                        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                                ViewGroup.LayoutParams.WRAP_CONTENT
+                                        );
+                                        ((FrameLayout) targetView).addView(overlay, params);
+                                    } else if (targetView instanceof ViewGroup) {
+                                        FrameLayout wrapper = new FrameLayout(ctx);
+                                        ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
+                                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                                ViewGroup.LayoutParams.MATCH_PARENT
+                                        );
+                                        parent.addView(wrapper, lp);
+                                        wrapper.addView(overlay);
+                                    }
+
+                                } catch (Throwable e) {
+                                    XposedBridge.log("Overlay error: " + Log.getStackTraceString(e));
+                                }
+                            });
 
                         }
+
+                        private String getResourceName(Context context, int id) {
+                            if (id == View.NO_ID) return null;
+                            try {
+                                return context.getResources().getResourceName(id);
+                            } catch (Resources.NotFoundException e) {
+                                return null;
+                            }
+                        }
+
+                        private int dpToPx(Context context, int dp) {
+                            return Math.round(dp * context.getResources().getDisplayMetrics().density);
+                        }
+
                     }
             );
+        }
     }
-    private void hideAdView(View view) {
-        final String viewClass = view.getClass().getName();
-        final int viewHash = System.identityHashCode(view);
-
+    private void showCopyablePopup(Context context, View anchorView, String text) {
         try {
-            // ログ: 処理開始
-            XposedBridge.log("[AdBlocker] Attempting to hide ad view: " +
-                    viewClass + " (hash: " + viewHash + ")");
+            TextView popupText = new TextView(context);
+            popupText.setText(text);
+            popupText.setTextColor(Color.WHITE);
+            popupText.setTextSize(12f);
+            popupText.setPadding(16, 16, 16, 16);
+            popupText.setBackgroundColor(0xEE000000);
+            popupText.setMovementMethod(LinkMovementMethod.getInstance());
+            popupText.setTextIsSelectable(true);
 
-            // 1. レイアウトパラメータ変更
-            ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-            if (layoutParams != null) {
-                XposedBridge.log("[AdBlocker] Original layout params - height: " +
-                        layoutParams.height + ", width: " + layoutParams.width);
+            PopupWindow popup = new PopupWindow(popupText,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    true);
 
-                layoutParams.height = 0;
-                layoutParams.width = 0;
-                view.setLayoutParams(layoutParams);
+            int[] location = new int[2];
+            anchorView.getLocationOnScreen(location);
+            popup.showAtLocation(anchorView, Gravity.TOP | Gravity.START,
+                    location[0] + 20, location[1] + 20);
 
-                XposedBridge.log("[AdBlocker] Modified layout params - height: " +
-                        layoutParams.height + ", width: " + layoutParams.width);
-            } else {
-                XposedBridge.log("[AdBlocker] No layout params found for view");
-            }
-
-            // 2. 可視性変更
-            XposedBridge.log("[AdBlocker] Original visibility: " + view.getVisibility());
-            view.setVisibility(View.GONE);
-            XposedBridge.log("[AdBlocker] New visibility: " + view.getVisibility());
-
-            // 3. 親Viewから削除
-            ViewParent parent = view.getParent();
-            if (parent instanceof ViewGroup) {
-                ViewGroup parentGroup = (ViewGroup) parent;
-                XposedBridge.log("[AdBlocker] Parent view: " + parent.getClass().getName() +
-                        " (child count before: " + parentGroup.getChildCount() + ")");
-
-                parentGroup.removeView(view);
-
-                XposedBridge.log("[AdBlocker] Child count after removal: " +
-                        parentGroup.getChildCount());
-            } else {
-                XposedBridge.log("[AdBlocker] No parent view found or not a ViewGroup");
-            }
-
-            // 4. リソースクリア
-            if (view.getBackground() != null) {
-                XposedBridge.log("[AdBlocker] Clearing background drawable");
-                view.setBackground(null);
-            }
-
-            if (view instanceof ImageView) {
-                ImageView imageView = (ImageView) view;
-                if (imageView.getDrawable() != null) {
-                    XposedBridge.log("[AdBlocker] Clearing image drawable");
-                    imageView.setImageDrawable(null);
-                }
-            }
-
-            // 成功ログ
-            XposedBridge.log("[AdBlocker] Successfully hid ad view: " + viewClass +
-                    " (hash: " + viewHash + ")");
-
-        } catch (Exception e) {
-            // エラーログ
-            XposedBridge.log("[AdBlocker] ERROR hiding view " + viewClass +
-                    " (hash: " + viewHash + "): " + Log.getStackTraceString(e));
+            new Handler(Looper.getMainLooper()).postDelayed(popup::dismiss, 5000);
+        } catch (Throwable e) {
+            XposedBridge.log("Popup error: " + Log.getStackTraceString(e));
         }
     }
 
@@ -949,6 +1020,10 @@ return;
             if (isChangingColor) {
                 return;
             }
+            if (view instanceof android.view.TextureView) {
+                XposedBridge.log("Skipped TextureView: " + view.getClass().getName());
+                return;
+            }
             isChangingColor = true;
             String resourceName = getViewResourceName(view);
             if (resourceName == null || resourceName.isEmpty()) {
@@ -1156,6 +1231,12 @@ return;
             Log.e("LoggingCheck", "Error reading log file", e);
             return false;
         }
+
+
+
     }
+
+
+
 
 }
