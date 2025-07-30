@@ -90,17 +90,17 @@ public class Main implements IXposedHookLoadPackage {
         if ("works.jubilee.timetree".equals(packageName)) {
 
 
-            Class<?> stateClass = XposedHelpers.findClass(
-                    "works.jubilee.timetree.features.home.presentation.U$g",
+            Class<?> A = XposedHelpers.findClass(
+                    "works.jubilee.timetree.features.home.presentation.X$g",
                     loadPackageParam.classLoader
             );
-            Class<?> stateClasss = XposedHelpers.findClass(
-                    "works.jubilee.timetree.features.home.presentation.v$g",
+            Class<?> B = XposedHelpers.findClass(
+                    "works.jubilee.timetree.features.home.presentation.y$g",
                     loadPackageParam.classLoader
             );
 
 
-            XposedHelpers.findAndHookMethod(stateClass,
+            XposedHelpers.findAndHookMethod(A,
                     "getDisplayHeightInDp",
                     new XC_MethodHook() {
                         @Override
@@ -119,7 +119,7 @@ public class Main implements IXposedHookLoadPackage {
                     "Hide"
             );
 
-            XposedHelpers.findAndHookMethod(stateClass,
+            XposedHelpers.findAndHookMethod(B,
                     "getViewState",
                     new XC_MethodHook() {
                         @Override
@@ -130,7 +130,7 @@ public class Main implements IXposedHookLoadPackage {
             );
 
 
-            XposedHelpers.findAndHookMethod(stateClasss,
+            XposedHelpers.findAndHookMethod(B,
                     "getViewState",
                     new XC_MethodHook() {
                         @Override
@@ -140,7 +140,7 @@ public class Main implements IXposedHookLoadPackage {
                     }
             );
             XposedHelpers.findAndHookMethod(
-                    "works.jubilee.timetree.ui.calendarmonthly.I0",
+                    "works.jubilee.timetree.ui.calendarmonthly.t1",
                     loadPackageParam.classLoader,
                     "onCreateViewHolder",
                     ViewGroup.class,
@@ -189,7 +189,7 @@ public class Main implements IXposedHookLoadPackage {
                     }
             );
             XposedHelpers.findAndHookMethod(
-                    "works.jubilee.timetree.ui.calendarmonthly.I0",
+                    "works.jubilee.timetree.ui.calendarmonthly.t1",
                     loadPackageParam.classLoader,
                     "setAd",
                     "works.jubilee.timetree.repository.ad.a", // 広告データの型
